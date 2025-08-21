@@ -1,0 +1,214 @@
+<<<<<<< HEAD
+<!-- templates/index.html -->
+
+{% extends "base.html" %}
+{% block title %}{{ _('Accueil') }}{% endblock %}
+
+{% block content %}
+
+    <!-- --- AJOUT DU STYLE CSS POUR CONTRÔLER LA HAUTEUR --- -->
+    <style>
+        .carousel-slide-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 350px; /* C'est ici que vous définissez la hauteur de vos slides */
+        }
+    </style>
+    <!-- --- FIN DE L'AJOUT DU STYLE --- -->
+
+
+    <!-- --- CARROUSEL DE TEXTE MIS À JOUR --- -->
+    <div id="heroCarousel" class="carousel slide mb-4" data-bs-ride="carousel" data-bs-touch="true">
+
+        <!-- Contenu des slides -->
+        <div class="carousel-inner">
+
+            <!-- Slide 1: Automatisation -->
+            <div class="carousel-item active" data-bs-interval="7000">
+                <div class="p-4 bg-dark text-white rounded-3 carousel-slide-content"> {# Padding réduit de p-5 à p-4 #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-robot display-1 text-success"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Automatisez vos Publications') }}</h1>
+                        <p class="fs-5">{{ _('Scores, stats et actualités publiés instantanément sur votre page Facebook.') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 2: Actualités -->
+            <div class="carousel-item" data-bs-interval="7000">
+                <div class="p-4 bg-primary text-white rounded-3 carousel-slide-content"> {# Padding réduit #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-newspaper display-1"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Contenu Exclusif') }}</h1>
+                        <p class="fs-5">{{ _('Engagez votre communauté avec des actualités réservées pour vous.') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 3: Simplicité -->
+            <div class="carousel-item" data-bs-interval="7000">
+                <div class="p-4 bg-secondary text-white rounded-3 carousel-slide-content"> {# Padding réduit #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-mouse2-fill display-1"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Simple et Efficace') }}</h1>
+                        <p class="fs-5">{{ _('Connectez votre page en quelques clics et laissez notre bot travailler pour vous.') }}</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    <!-- --- FIN DU CARROUSEL --- -->
+
+    <!-- Section du bouton d'appel à l'action -->
+    <div class="text-center py-3">
+        {% if current_user.is_authenticated %}
+            <a class="btn btn-primary btn-lg" href="{{ url_for('main.dashboard') }}">{{ _('Aller au Tableau de bord') }}</a>
+        {% else %}
+            <a class="btn btn-primary btn-lg" href="{{ url_for('main.register') }}">{{ _('Commencer') }}</a>
+        {% endif %}
+    </div>
+
+    <div class="container mt-5">
+        <div class="row align-items-center">
+            
+            {# On crée 5 colonnes qui occuperont chacune environ 1/5 de l'espace #}
+            {# 'col' permet une distribution équitable de l'espace disponible #}
+            
+            <!-- Logo 1 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/pl.png') }}" class="img-fluid" alt="Premier League Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 2 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/liga.png') }}" class="img-fluid" alt="La Liga Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 3 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/seriea.png') }}" class="img-fluid" alt="Serie A Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 4 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/bundesliga.png') }}" class="img-fluid" alt="Bundesliga Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 5 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/ligue1.png') }}" class="img-fluid" alt="Ligue 1 Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+        </div>
+    </div>
+    <!-- --- FIN DE LA SECTION DES LOGOS CORRIGÉE --- -->
+=======
+<!-- templates/index.html -->
+
+{% extends "base.html" %}
+{% block title %}{{ _('Accueil') }}{% endblock %}
+
+{% block content %}
+
+    <!-- --- AJOUT DU STYLE CSS POUR CONTRÔLER LA HAUTEUR --- -->
+    <style>
+        .carousel-slide-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 350px; /* C'est ici que vous définissez la hauteur de vos slides */
+        }
+    </style>
+    <!-- --- FIN DE L'AJOUT DU STYLE --- -->
+
+
+    <!-- --- CARROUSEL DE TEXTE MIS À JOUR --- -->
+    <div id="heroCarousel" class="carousel slide mb-4" data-bs-ride="carousel" data-bs-touch="true">
+
+        <!-- Contenu des slides -->
+        <div class="carousel-inner">
+
+            <!-- Slide 1: Automatisation -->
+            <div class="carousel-item active" data-bs-interval="7000">
+                <div class="p-4 bg-dark text-white rounded-3 carousel-slide-content"> {# Padding réduit de p-5 à p-4 #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-robot display-1 text-success"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Automatisez vos Publications') }}</h1>
+                        <p class="fs-5">{{ _('Scores, stats et actualités publiés instantanément sur votre page Facebook.') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 2: Actualités -->
+            <div class="carousel-item" data-bs-interval="7000">
+                <div class="p-4 bg-primary text-white rounded-3 carousel-slide-content"> {# Padding réduit #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-newspaper display-1"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Contenu Exclusif') }}</h1>
+                        <p class="fs-5">{{ _('Engagez votre communauté avec des actualités réservées pour vous.') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 3: Simplicité -->
+            <div class="carousel-item" data-bs-interval="7000">
+                <div class="p-4 bg-secondary text-white rounded-3 carousel-slide-content"> {# Padding réduit #}
+                    <div class="container-fluid text-center">
+                        <i class="bi bi-mouse2-fill display-1"></i>
+                        <h1 class="display-5 fw-bold mt-3">{{ _('Simple et Efficace') }}</h1>
+                        <p class="fs-5">{{ _('Connectez votre page en quelques clics et laissez notre bot travailler pour vous.') }}</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    <!-- --- FIN DU CARROUSEL --- -->
+
+    <!-- Section du bouton d'appel à l'action -->
+    <div class="text-center py-3">
+        {% if current_user.is_authenticated %}
+            <a class="btn btn-primary btn-lg" href="{{ url_for('main.dashboard') }}">{{ _('Aller au Tableau de bord') }}</a>
+        {% else %}
+            <a class="btn btn-primary btn-lg" href="{{ url_for('main.register') }}">{{ _('Commencer') }}</a>
+        {% endif %}
+    </div>
+
+    <div class="container mt-5">
+        <div class="row align-items-center">
+            
+            {# On crée 5 colonnes qui occuperont chacune environ 1/5 de l'espace #}
+            {# 'col' permet une distribution équitable de l'espace disponible #}
+            
+            <!-- Logo 1 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/pl.png') }}" class="img-fluid" alt="Premier League Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 2 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/liga.png') }}" class="img-fluid" alt="La Liga Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 3 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/seriea.png') }}" class="img-fluid" alt="Serie A Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 4 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/bundesliga.png') }}" class="img-fluid" alt="Bundesliga Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+            <!-- Logo 5 -->
+            <div class="col text-center">
+                <img src="{{ url_for('static', filename='images/ligue1.png') }}" class="img-fluid" alt="Ligue 1 Logo" style="max-height: 50px; filter: grayscale(80%); opacity: 0.7;">
+            </div>
+
+        </div>
+    </div>
+    <!-- --- FIN DE LA SECTION DES LOGOS CORRIGÉE --- -->
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a
+{% endblock %}

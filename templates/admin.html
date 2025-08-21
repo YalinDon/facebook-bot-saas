@@ -1,0 +1,121 @@
+<<<<<<< HEAD
+<!-- templates/admin.html -->
+
+{% extends "base.html" %}
+{% block title %}Panneau d'Administration{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Panneau d'Administration</h1>
+
+    <div class="row">
+        <!-- Carte pour les notifications -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    Envoyer une notification à tous les utilisateurs
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('main.admin_notify_all') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Contenu de la notification</label>
+                            <textarea class="form-control" id="message" name="message" rows="4" required placeholder="Ex: Une maintenance est prévue ce soir à 23h."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Êtes-vous sûr de vouloir envoyer cette notification à TOUS les utilisateurs ?');">
+                            <i class="bi bi-send-fill me-2"></i>Envoyer à tous
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Carte pour les actualités -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    Envoyer une actualité aux abonnés Business
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('main.admin_publish_news') }}" method="POST">
+                        <div class="mb-3">
+                            <label for="news_title" class="form-label">Titre de l'actualité</label>
+                            <input type="text" class="form-control" id="news_title" name="title" required placeholder="Ex: Mercato : Accord trouvé pour la star !">
+                        </div>
+                        <div class="mb-3">
+                            <label for="news_content" class="form-label">Contenu complet de l'actualité</label>
+                            <textarea class="form-control" id="news_content" name="content" rows="6" required placeholder="Écrivez le corps de l'article ici..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Êtes-vous sûr de vouloir publier cette actualité pour TOUS les abonnés Business ?');">
+                            <i class="bi bi-newspaper me-2"></i>Publier l'actualité
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section pour la gestion des utilisateurs -->
+    <div class="card">
+        <div class="card-header">
+            Gestion des Rôles
+        </div>
+        <div class="card-body">
+            <p>Gérez les utilisateurs et leurs permissions d'administration.</p>
+            <a href="{{ url_for('main.admin_users') }}" class="btn btn-primary">
+                <i class="bi bi-people-fill me-2"></i>Gérer les utilisateurs
+            </a>
+        </div>
+    </div>
+{% endblock %}
+=======
+<!-- templates/admin.html -->
+
+{% extends "base.html" %}
+{% block title %}Panneau d'Administration{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Panneau d'Administration</h1>
+
+    <div class="card">
+        <div class="card-header">
+            Envoyer une notification à tous les utilisateurs
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('main.admin_notify_all') }}" method="POST">
+                <div class="mb-3">
+                    <label for="message" class="form-label">Contenu de la notification</label>
+                    <textarea class="form-control" id="message" name="message" rows="4" required placeholder="Ex: Une maintenance est prévue ce soir à 23h."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" onclick="return confirm('Êtes-vous sûr de vouloir envoyer cette notification à TOUS les utilisateurs ?');">
+                    <i class="bi bi-send-fill me-2"></i>Envoyer à tous
+                </button>
+            </form>
+        </div>
+    </div>
+    <!-- Dans templates/admin.html -->
+
+    <!-- ... (le premier card pour les notifications) ... -->
+
+    <!-- --- NOUVEAU FORMULAIRE POUR LES ACTUALITÉS --- -->
+    <div class="card mt-4">
+        <div class="card-header">
+            Envoyer une actualité aux abonnés Business
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('main.admin_publish_news') }}" method="POST">
+                <div class="mb-3">
+                    <label for="news_title" class="form-label">Titre de l'actualité</label>
+                    <input type="text" class="form-control" id="news_title" name="title" required placeholder="Ex: Mercato : Accord trouvé pour la star !">
+                </div>
+                <div class="mb-3">
+                    <label for="news_content" class="form-label">Contenu complet de l'actualité</label>
+                    <textarea class="form-control" id="news_content" name="content" rows="6" required placeholder="Écrivez le corps de l'article ici..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" onclick="return confirm('Êtes-vous sûr de vouloir publier cette actualité pour TOUS les abonnés Business ?');">
+                    <i class="bi bi-newspaper me-2"></i>Publier l'actualité
+                </button>
+            </form>
+        </div>
+    </div>
+<!-- --- FIN DU NOUVEAU FORMULAIRE --- -->
+{% endblock %}
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a

@@ -1,0 +1,72 @@
+<<<<<<< HEAD
+<!-- templates/select_page.html -->
+
+{% extends "base.html" %}
+{% block title %}Sélectionner une Page{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">Choisissez une page à connecter</h2>
+                    <p class="text-muted">Sélectionnez la page sur laquelle vous souhaitez que le bot publie les scores.</p>
+                    
+                    {% if pages %}
+                        <form method="POST" action="">
+                            <div class="list-group">
+                                {% for page in pages %}
+                                    <label class="list-group-item">
+                                        <input class="form-check-input me-2" type="radio" name="page_choice" value="{{ loop.index0 }}" required>
+                                        {{ page.name }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            <div class="d-grid mt-3">
+                                <button type="submit" class="btn btn-primary">Connecter cette page</button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <p class="text-danger">Aucune page trouvée.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+=======
+<!-- templates/select_page.html -->
+
+{% extends "base.html" %}
+{% block title %}Sélectionner une Page{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title">Choisissez une page à connecter</h2>
+                    <p class="text-muted">Sélectionnez la page sur laquelle vous souhaitez que le bot publie les scores.</p>
+                    
+                    {% if pages %}
+                        <form method="POST" action="">
+                            <div class="list-group">
+                                {% for page in pages %}
+                                    <label class="list-group-item">
+                                        <input class="form-check-input me-2" type="radio" name="page_choice" value="{{ loop.index0 }}" required>
+                                        {{ page.name }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            <div class="d-grid mt-3">
+                                <button type="submit" class="btn btn-primary">Connecter cette page</button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <p class="text-danger">Aucune page trouvée.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a
+{% endblock %}

@@ -1,0 +1,59 @@
+<<<<<<< HEAD
+<!-- templates/cancel_fedapay.html -->
+
+{% extends "base.html" %}
+{% block title %}Annuler l'Abonnement{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger text-center">
+                <div class="card-header bg-danger text-white">
+                    <h2>Confirmation d'Annulation Requise</h2>
+                </div>
+                <div class="card-body">
+                    <p class="fs-5">Vous êtes sur le point d'annuler votre abonnement actuel (<strong>Forfait {{ current_user.subscription_plan.capitalize() }}</strong>).</p>
+                    <p class="alert alert-warning">
+                        <strong>Attention :</strong> Cette action est immédiate et irréversible. Votre accès premium sera désactivé et le bot cessera de publier sur vos pages.
+                    </p>
+                    <p>Après l'annulation, vous serez redirigé vers la page des tarifs pour choisir un nouveau forfait si vous le souhaitez.</p>
+                    
+                    <form action="{{ url_for('main.cancel_fedapay_subscription') }}" method="POST" class="mt-4">
+                        <button type="submit" class="btn btn-danger btn-lg">Je confirme, annuler mon abonnement</button>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary btn-lg">Non, retourner au tableau de bord</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+=======
+<!-- templates/cancel_fedapay.html -->
+
+{% extends "base.html" %}
+{% block title %}Annuler l'Abonnement{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger text-center">
+                <div class="card-header bg-danger text-white">
+                    <h2>Confirmation d'Annulation Requise</h2>
+                </div>
+                <div class="card-body">
+                    <p class="fs-5">Vous êtes sur le point d'annuler votre abonnement actuel (<strong>Forfait {{ current_user.subscription_plan.capitalize() }}</strong>).</p>
+                    <p class="alert alert-warning">
+                        <strong>Attention :</strong> Cette action est immédiate et irréversible. Votre accès premium sera désactivé et le bot cessera de publier sur vos pages.
+                    </p>
+                    <p>Après l'annulation, vous serez redirigé vers la page des tarifs pour choisir un nouveau forfait si vous le souhaitez.</p>
+                    
+                    <form action="{{ url_for('main.cancel_fedapay_subscription') }}" method="POST" class="mt-4">
+                        <button type="submit" class="btn btn-danger btn-lg">Je confirme, annuler mon abonnement</button>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary btn-lg">Non, retourner au tableau de bord</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a

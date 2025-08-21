@@ -1,0 +1,186 @@
+<<<<<<< HEAD
+<!-- templates/pricing.html -->
+
+{% extends "base.html" %}
+{% block title %}Nos Forfaits{% endblock %}
+
+{% block content %}
+    <div class="text-center">
+        <h1>Choisissez le forfait qui vous convient</h1>
+        <p class="lead text-muted">Tous nos abonnements sont sécurisés et gérés par nos partenaires de confiance.</p>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-2 g-4 justify-content-center mt-3">
+        
+        <!-- === FORFAIT PRO === -->
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header text-center">
+                    <h4 class="my-0 fw-normal">Pro</h4>
+                </div>
+                <div class="card-body text-center d-flex flex-column">
+                    <h1 class="card-title pricing-card-title">5€<small class="text-muted fw-light">/mois</small></h1>
+                    <p>(ou 50€ par an)</p>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li><strong>3 pages Facebook</strong> maximum</li>
+                        <li>Toutes les fonctionnalités du bot</li>
+                    </ul>
+                    <div class="mt-auto">
+                        <h5 class="mt-3 mb-2">Payer par Carte Bancaire</h5>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST">
+                            <input type="hidden" name="price_id" value="price_1RsvfG3Y20QJGPUGsrAUs5ia">
+                            <button type="submit" class="w-100 btn btn-outline-primary">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="price_id" value="price_1RuGdN3Y20QJGPUGJHSZFyvY">
+                            <button type="submit" class="w-100 btn btn-outline-primary">Choisir Annuel</button>
+                        </form>
+                        <hr>
+                        <h5 class="mt-3 mb-2">Payer par Mobile Money</h5>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST">
+                            <input type="hidden" name="plan_id" value="pro_monthly">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="plan_id" value="pro_annual">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Annuel</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- === FORFAIT BUSINESS === -->
+        <div class="col">
+            <div class="card h-100 shadow-sm border-primary">
+                <div class="card-header text-center text-white bg-primary border-primary">
+                    <h4 class="my-0 fw-normal">Business</h4>
+                </div>
+                <div class="card-body text-center d-flex flex-column">
+                    <h1 class="card-title pricing-card-title">10€<small class="text-muted fw-light">/mois</small></h1>
+                    <p>(ou 100€ par an)</p>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li><strong>Pages Facebook illimitées</strong></li>
+                        <li><strong>Publication des actualités</strong></li>
+                        <li>Toutes les fonctionnalités du bot</li>
+                        
+                    </ul>
+                    <div class="mt-auto">
+                        <h5 class="mt-3 mb-2">Payer par Carte Bancaire</h5>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST">
+                            <input type="hidden" name="price_id" value="price_1Rsvjv3Y20QJGPUGhARwbyuX">
+                            <button type="submit" class="w-100 btn btn-primary">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="price_id" value="price_1Rsvjv3Y20QJGPUGhARwbyuX">
+                            <button type="submit" class="w-100 btn btn-primary">Choisir Annuel</button>
+                        </form>
+                        <hr>
+                        <h5 class="mt-3 mb-2">Payer par Mobile Money</h5>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST">
+                            <input type="hidden" name="plan_id" value="business_monthly">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="plan_id" value="business_annual">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Annuel</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+=======
+<!-- templates/pricing.html -->
+
+{% extends "base.html" %}
+{% block title %}Nos Forfaits{% endblock %}
+
+{% block content %}
+    <div class="text-center">
+        <h1>Choisissez le forfait qui vous convient</h1>
+        <p class="lead text-muted">Tous nos abonnements sont sécurisés et gérés par nos partenaires de confiance.</p>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-2 g-4 justify-content-center mt-3">
+        
+        <!-- === FORFAIT PRO === -->
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header text-center">
+                    <h4 class="my-0 fw-normal">Pro</h4>
+                </div>
+                <div class="card-body text-center d-flex flex-column">
+                    <h1 class="card-title pricing-card-title">5€<small class="text-muted fw-light">/mois</small></h1>
+                    <p>(ou 50€ par an)</p>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li><strong>3 pages Facebook</strong> maximum</li>
+                        <li>Toutes les fonctionnalités du bot</li>
+                    </ul>
+                    <div class="mt-auto">
+                        <h5 class="mt-3 mb-2">Payer par Carte Bancaire</h5>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST">
+                            <input type="hidden" name="price_id" value="price_1RsvfG3Y20QJGPUGsrAUs5ia">
+                            <button type="submit" class="w-100 btn btn-outline-primary">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="price_id" value="price_1RuGdN3Y20QJGPUGJHSZFyvY">
+                            <button type="submit" class="w-100 btn btn-outline-primary">Choisir Annuel</button>
+                        </form>
+                        <hr>
+                        <h5 class="mt-3 mb-2">Payer par Mobile Money</h5>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST">
+                            <input type="hidden" name="plan_id" value="pro_monthly">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="plan_id" value="pro_annual">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Annuel</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- === FORFAIT BUSINESS === -->
+        <div class="col">
+            <div class="card h-100 shadow-sm border-primary">
+                <div class="card-header text-center text-white bg-primary border-primary">
+                    <h4 class="my-0 fw-normal">Business</h4>
+                </div>
+                <div class="card-body text-center d-flex flex-column">
+                    <h1 class="card-title pricing-card-title">10€<small class="text-muted fw-light">/mois</small></h1>
+                    <p>(ou 100€ par an)</p>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li><strong>Pages Facebook illimitées</strong></li>
+                        <li><strong>Publication des actualités</strong></li>
+                        <li>Toutes les fonctionnalités du bot</li>
+                        
+                    </ul>
+                    <div class="mt-auto">
+                        <h5 class="mt-3 mb-2">Payer par Carte Bancaire</h5>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST">
+                            <input type="hidden" name="price_id" value="price_1Rsvjv3Y20QJGPUGhARwbyuX">
+                            <button type="submit" class="w-100 btn btn-primary">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_checkout_session') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="price_id" value="price_1Rsvjv3Y20QJGPUGhARwbyuX">
+                            <button type="submit" class="w-100 btn btn-primary">Choisir Annuel</button>
+                        </form>
+                        <hr>
+                        <h5 class="mt-3 mb-2">Payer par Mobile Money</h5>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST">
+                            <input type="hidden" name="plan_id" value="business_monthly">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Mensuel</button>
+                        </form>
+                        <form action="{{ url_for('main.create_fedapay_checkout') }}" method="POST" class="mt-2">
+                            <input type="hidden" name="plan_id" value="business_annual">
+                            <button type="submit" class="w-100 btn btn-warning">Choisir Annuel</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a
+{% endblock %}

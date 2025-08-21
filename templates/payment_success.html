@@ -1,0 +1,53 @@
+<<<<<<< HEAD
+<!-- templates/payment_success.html -->
+
+{% extends "base.html" %}
+{% block title %}Paiement Réussi{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card text-center border-success">
+                <div class="card-body p-5">
+                    <h1 class="card-title text-success">Abonnement activé !</h1>
+                    <p class="card-text fs-5 mt-3">
+                        Merci pour votre confiance. Votre compte a été mis à jour et vous pouvez maintenant profiter de toutes les fonctionnalités de votre forfait.
+                    </p>
+                    <p class="card-text text-muted">
+                        Le statut sur votre tableau de bord devrait se mettre à jour d'ici quelques instants.
+                    </p>
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg mt-4">
+                        Continuer vers le tableau de bord
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+=======
+<!-- templates/payment_success.html -->
+
+{% extends "base.html" %}
+{% block title %}Paiement Réussi{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card text-center border-success">
+                <div class="card-body p-5">
+                    <h1 class="card-title text-success">Abonnement activé !</h1>
+                    <p class="card-text fs-5 mt-3">
+                        Merci pour votre confiance. Votre compte a été mis à jour et vous pouvez maintenant profiter de toutes les fonctionnalités de votre forfait.
+                    </p>
+                    <p class="card-text text-muted">
+                        Le statut sur votre tableau de bord devrait se mettre à jour d'ici quelques instants.
+                    </p>
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg mt-4">
+                        Continuer vers le tableau de bord
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+>>>>>>> fbb69e9e5633005d19d8e9365d836fbf1f87dd2a
