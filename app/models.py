@@ -26,9 +26,7 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(50), nullable=False, default='user')
     # Statut de l'abonnement, mis à jour par le webhook Stripe
     subscription_status = db.Column(db.String(20), nullable=False, default='inactive')
-    
-    # Stocke l'ID client de Stripe pour gérer l'abonnement
-    stripe_customer_id = db.Column(db.String(120), unique=True, nullable=True)
+
     
     # Date de création du compte
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -41,8 +39,8 @@ class User(db.Model, UserMixin):
     subscription_plan = db.Column(db.String(50), nullable=True)
     # Relation avec les pages Facebook de l'utilisateur
     subscription_provider = db.Column(db.String(50), nullable=True)
-    provider_customer_id = db.Column(db.String(255), nullable=True)
-    subscription_expires_at = db.Column(db.DateTime, nullable=True)
+    fedapay_token = db.Column(db.String(255), nullable=True) # Pour stocker le token de la carte
+    next_billing_date = db.Column(db.Date, nullable=True) # Pour savoir quand prélever    
     pages = db.relationship('FacebookPage', backref='owner', lazy=True, cascade="all, delete-orphan")
 
     @property

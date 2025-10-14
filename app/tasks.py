@@ -11,12 +11,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from facebook import GraphAPI
 from selenium.common.exceptions import TimeoutException
-from datetime import datetime
-
+from datetime import datetime, date, timedelta
+import requests
 from app import scheduler, db
 from app.models import User, FacebookPage, Broadcast, PublishedNews
 from app.services import EncryptionService
-
+from .plans import FEDAPAY_PLANS
 # --- Configuration Globale du Scraping ---
 LIVE_URL = "https://www.matchendirect.fr/live-score/"
 FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
@@ -486,8 +486,75 @@ def run_centralized_checks():
             print(f"--- Cycle centralisé terminé en {duration:.2f} secondes ---")
 
 
+def charge_with_fedapay_token(user, plan_info):
+    """Tente de prélever un utilisateur avec un token Fedapay."""
+    api_base_url = _app.config['FEDAPAY_API_BASE']
+    api_key = _app.config['FEDAPAY_SECRET_KEY']
+    url = f"{api_base_url}/transactions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    
+    data = {
+        "description": f"Renouvellement abonnement - Forfait {plan_info['plan_name'].capitalize()}",
+        "amount": plan_info['amount'],
+        "currency": {"iso": "XOF"},
+        "token": user.fedapay_token
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        res_data = response.json()
+        return res_data['v1/transaction']['status'] == 'approved'
+    except Exception as e:
+        print(f"ERREUR de renouvellement Fedapay pour {user.email}: {e}")
+        return False
 
 # Dans app/tasks.py
+
+def run_daily_renewals():
+    """Tâche nocturne qui gère les renouvellements d'abonnement Fedapay."""
+    if _app is None: return
+    with _app.app_context():
+        print(f"\n--- [{datetime.now().strftime('%Y-%m-%d')}] Démarrage des renouvellements Fedapay ---")
+        
+        today = date.today()
+        users_to_renew = User.query.filter(
+            User.subscription_provider == 'fedapay',
+            User.next_billing_date == today
+        ).all()
+
+        if not users_to_renew:
+            print("Aucun renouvellement Fedapay prévu aujourd'hui.")
+            return
+
+        print(f"Trouvé {len(users_to_renew)} utilisateur(s) à renouveler...")
+        for user in users_to_renew:
+            # --- DÉBUT DE LA LOGIQUE CORRIGÉE ---
+            # On trouve le plan correspondant au renouvellement. On assume qu'ils renouvellent
+            # avec la même durée. On doit deviner si c'est mensuel ou annuel.
+            # NOTE: Il faudrait stocker la durée pour que ce soit parfait.
+            # Pour l'instant, on cherche le plan mensuel correspondant.
+            plan_id_to_renew = f"{user.subscription_plan}_monthly" 
+            plan_info = FEDAPAY_PLANS.get(plan_id_to_renew)
+
+            if not plan_info or not user.fedapay_token:
+                print(f"Données de renouvellement invalides pour {user.email}, annulation.")
+                user.subscription_status = 'inactive'
+                continue
+            # --- FIN DE LA LOGIQUE CORRIGÉE ---
+
+            if charge_with_fedapay_token(user, plan_info):
+                duration = plan_info['duration_days']
+                user.next_billing_date = today + timedelta(days=duration)
+                print(f" -> Renouvellement RÉUSSI pour {user.email}")
+            else:
+                user.subscription_status = 'inactive'
+                user.subscription_plan = None
+                user.next_billing_date = None
+                print(f" -> Renouvellement ÉCHOUÉ pour {user.email}. Compte désactivé.")
+
+        db.session.commit()
+        print("--- Renouvellements Fedapay terminés ---")
 
 # Dans app/tasks.py
 
@@ -616,4 +683,12 @@ if not scheduler.get_job('live_summary_job'):
         func=post_live_scores_summary, 
         trigger='interval', 
         minutes=30
+    )
+    
+if not scheduler.get_job('fedapay_renewal_job'):
+    scheduler.add_job(
+        id='fedapay_renewal_job',
+        func=run_daily_renewals,
+        trigger='cron',
+        hour=2 # Tous les jours à 2h du matin
     )

@@ -9,67 +9,62 @@
     {# On définit nos variables de statut pour les réutiliser facilement #}
     {% set is_subscribed = current_user.subscription_status == 'active' %}
     {% set is_in_trial = current_user.trial_ends_at and current_user.trial_ends_at > now() %}
-    {% set trial_ended = current_user.trial_ends_at and current_user.trial_ends_at <= now() %}
-    {% set has_never_started_trial = current_user.trial_ends_at is none %}
+    {% set has_had_trial_or_sub = current_user.trial_ends_at is not none or current_user.subscription_provider is not none %}
 
     <!-- Bloc de statut de l'abonnement -->
     <div class="card mb-4">
         <div class="card-body">
             
-            {# CAS SPÉCIAL : Si l'utilisateur est un Super Admin #}
+            {# CAS 1 : Super Admin #}
             {% if current_user.is_superadmin %}
                 <h5 class="card-title">Statut Administrateur</h5>
                 <div class="alert alert-success">
                     <p class="mb-0">Vous êtes connecté en tant que <strong>Super Administrateur</strong>.</p>
-                    <p class="mb-0 small text-muted">Vous avez un accès illimité à toutes les fonctionnalités pour les tests et la maintenance.</p>
+                    <p class="mb-0 small text-muted">Accès illimité à toutes les fonctionnalités.</p>
                 </div>
 
-            {# CAS NORMAL : Pour tous les autres utilisateurs #}
+            {# CAS 2 : Abonné Actif #}
             {% elif is_subscribed %}
                 <h5 class="card-title">Statut de l'abonnement</h5>
                 {% if current_user.subscription_plan == 'pro' %}
                     <p class="card-text">Vous avez un abonnement <strong class="text-success">Actif (Forfait Pro)</strong>.</p>
                 {% elif current_user.subscription_plan == 'business' %}
                     <p class="card-text">Vous avez un abonnement <strong class="text-success">Actif (Forfait Business)</strong>.</p>
-                {% else %}
-                    <p class="card-text">Vous avez un abonnement <strong class="text-success">Actif</strong>.</p>
                 {% endif %}
-                {% if current_user.subscription_expires_at %}
-                    <p class="card-text text-muted small">Votre accès est valide jusqu'au {{ current_user.subscription_expires_at.strftime('%d/%m/%Y') }}.</p>
+                {% if current_user.next_billing_date %}
+                    <p class="card-text text-muted small">Prochain prélèvement le {{ current_user.next_billing_date.strftime('%d/%m/%Y') }}.</p>
                 {% endif %}
-                {% if current_user.subscription_provider == 'stripe' %}
-                    <form action="{{ url_for('main.manage_subscription') }}" method="POST" style="margin-top: 10px;">
-                        <button type="submit" class="btn btn-secondary">Gérer mon abonnement</button>
-                    </form>
-                {% elif current_user.subscription_provider == 'fedapay' %}
-                    <a href="{{ url_for('main.manage_fedapay_subscription') }}" class="btn btn-secondary mt-2">Modifier l'abonnement</a>
-                {% endif %}
+                <a href="{{ url_for('main.manage_fedapay_subscription') }}" class="btn btn-secondary mt-2">Modifier/Annuler l'abonnement</a>
             
+            {# CAS 3 : En Période d'Essai #}
             {% elif is_in_trial %}
                 <h5 class="card-title">Période d'Essai</h5>
                 <p class="card-text">Vous êtes actuellement en <strong class="text-primary">période d'essai</strong>. Il vous reste : <strong>{{ (current_user.trial_ends_at - now()).days }}j {{ ((current_user.trial_ends_at - now()).seconds // 3600) }}h</strong>.</p>
                 <p class="text-muted small">Pendant l'essai, vous ne pouvez connecter qu'une seule page.</p>
                 <a href="{{ url_for('main.pricing') }}" class="btn btn-success">Passer à l'abonnement</a>
 
-            {% elif trial_ended %}
+            {# CAS 4 : L'utilisateur a déjà eu un essai ou un abonnement qui est maintenant terminé #}
+            {% elif has_had_trial_or_sub %}
                 <div class="alert alert-warning text-center">
-                    <h4 class="alert-heading">Période d'essai terminée</h4>
-                    <p>Pour continuer à utiliser le service, veuillez choisir un forfait.</p>
-                    <a href="{{ url_for('main.pricing') }}" class="btn btn-success">Voir les forfaits</a>
+                    <h4 class="alert-heading">Votre accès a expiré</h4>
+                    <p>Pour réactiver le service, veuillez choisir un forfait.</p>
+                    <a href="{{ url_for('main.pricing') }}" class="btn btn-success">Voir les forfaits et se réabonner</a>
                 </div>
 
-            {% elif has_never_started_trial %}
+            {# CAS 5 : Nouvel utilisateur qui n'a JAMAIS rien activé #}
+            {% else %}
                 <div class="alert alert-info text-center">
                     <h4 class="alert-heading">Commencez dès maintenant !</h4>
                     <p>Démarrez votre essai gratuit de 48h ou abonnez-vous directement pour débloquer toutes les fonctionnalités.</p>
                     <form action="{{ url_for('main.start_trial') }}" method="POST" class="d-inline-block me-2"><button type="submit" class="btn btn-primary">Démarrer mon essai gratuit (48h)</button></form>
-                    <a href="{{ url_for('main.pricing') }}" class="btn btn-success d-inline-block">S'abonner directement</a>
+                    <a href="{{ url_for('main.pricing') }}" class="btn btn-primary d-inline-block">S'abonner directement</a>
                 </div>
             {% endif %}
+            
         </div>
     </div>
 
-    <!-- Bloc de gestion des pages et de l'historique (visible si abonné, en essai, OU SUPERADMIN) -->
+    <!-- Bloc de gestion des pages et de l'historique (visible si l'accès est actif) -->
     {% if is_subscribed or is_in_trial or current_user.is_superadmin %}
         <div class="card mb-4">
             <div class="card-header">
@@ -109,7 +104,6 @@
             </div>
         </div>
 
-        <!-- SECTION HISTORIQUE UNIFIÉE ET AMÉLIORÉE -->
         <div class="card">
             <div class="card-header">
                 <h2>Historique des Dernières Publications</h2>

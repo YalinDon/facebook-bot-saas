@@ -19,7 +19,7 @@ import requests
 from flask_babel import _
 # Dans app/routes.py, après les imports
 from functools import wraps
-
+from .plans import FEDAPAY_PLANS
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -30,19 +30,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 # --- MAPPING DES FORFAITS ---
-# IMPORTANT : Remplacez ces valeurs par VOS propres ID de tarifs Stripe
-PLAN_PRICE_MAP = {
-    'price_1RsvfG3Y20QJGPUGsrAUs5ia': 'pro',
-    'price_1RuGdN3Y20QJGPUGJHSZFyvY': 'pro',
-    'price_1Rsvjv3Y20QJGPUGhARwbyuX': 'business',
-    'price_1RuGaW3Y20QJGPUGtn4jAYXp': 'business',
-}
-FEDAPAY_PLANS = {
-    'pro_monthly': {'amount': 3300, 'plan_name': 'pro'},
-    'pro_annual': {'amount': 32800, 'plan_name': 'pro'},
-    'business_monthly': {'amount': 6600, 'plan_name': 'business'},
-    'business_annual': {'amount': 65600, 'plan_name': 'business'}
-}
+
 main = Blueprint('main', __name__)
 
 # =============================================================================
@@ -365,19 +353,44 @@ def delete_page(page_id):
     flash(f"La page '{page.page_name}' a été supprimée.", "success")
     return redirect(url_for('main.dashboard'))
 
+# Dans app/routes.py
+
 @main.route('/start-trial', methods=['POST'])
 @login_required
 def start_trial():
-    # ... (inchangé)
+    """
+    Démarre la période d'essai pour un utilisateur, mais seulement s'il n'en a jamais eu.
+    """
+    
+    # 1. Vérification de Sécurité :
+    # On s'assure que l'utilisateur n'est pas déjà un abonné actif
+    # ET qu'il n'a jamais eu d'essai par le passé (la colonne trial_ends_at doit être vide).
     if current_user.subscription_status == 'active' or current_user.trial_ends_at is not None:
+        flash("Vous avez déjà bénéficié d'une période d'essai et n'êtes plus éligible.", "warning")
         return redirect(url_for('main.dashboard'))
-    current_user.trial_ends_at = datetime.utcnow() + timedelta(hours=48)
-        # --- AJOUT : Création de la notification ---
-    notif_content = "Bienvenue ! Votre période d'essai de 48 heures a commencé."
-    new_notification = Notification(user_id=current_user.id, content=notif_content)
-    db.session.add(new_notification)
-    db.session.commit()
-    flash("Votre période d'essai de 48h a commencé !", "success")
+
+    # 2. Si les vérifications passent, on démarre l'essai
+    try:
+        # On définit la date de fin de l'essai à 48 heures dans le futur
+        current_user.trial_ends_at = datetime.utcnow() + timedelta(hours=48)
+        
+        # On crée une notification pour l'utilisateur
+        notif_content = "Bienvenue ! Votre période d'essai de 48 heures a commencé."
+        
+        # On importe le modèle Notification ici pour éviter tout risque d'importation circulaire
+        from .models import Notification
+        db.session.add(Notification(user_id=current_user.id, content=notif_content))
+        
+        # On sauvegarde les changements dans la base de données
+        db.session.commit()
+        
+        flash("Votre période d'essai de 48h a commencé ! Connectez une page pour en profiter.", "success")
+    
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erreur lors du démarrage de l'essai pour {current_user.email}: {e}")
+        flash("Une erreur est survenue. Veuillez réessayer.", "danger")
+
     return redirect(url_for('main.dashboard'))
 
 # --- NOUVELLE ROUTE ---
@@ -387,124 +400,6 @@ def pricing():
     return render_template('pricing.html')
 
 
-# Dans app/routes.py
-
-@main.route('/stripe_webhook', methods=['POST'])
-def stripe_webhook():
-    payload = request.get_data(as_text=True)
-    sig_header = request.headers.get('Stripe-Signature')
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
-    webhook_secret = current_app.config['STRIPE_WEBHOOK_SECRET']
-    
-    try:
-        event = stripe.Webhook.construct_event(
-            payload=payload, sig_header=sig_header, secret=webhook_secret
-        )
-    except (ValueError, stripe.error.SignatureVerificationError):
-        return 'Webhook error', 400
-    
-    # --- DÉBUT DE LA LOGIQUE CORRIGÉE ---
-
-    # CAS 1 : Un NOUVEL abonnement a été créé
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        user_id = session.get('client_reference_id')
-        if user_id and (user := User.query.get(int(user_id))):
-            subscription_id = session.get('subscription')
-            try:
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                price_id = subscription['items']['data'][0]['price']['id']
-                
-                user.subscription_status = 'active'
-                user.subscription_plan = PLAN_PRICE_MAP.get(price_id)
-                user.subscription_provider = 'stripe'
-                user.trial_ends_at = None
-                user.stripe_customer_id = session.get('customer')
-                db.session.commit()
-                print(f"WEBHOOK: Nouvel abonnement '{user.subscription_plan}' ACTIVÉ pour {user.email}")
-            except Exception as e:
-                db.session.rollback()
-                print(f"WEBHOOK ERREUR (checkout.session.completed): {e}")
-
-    # CAS 2 : Un abonnement a été mis à jour OU renouvelé
-    # On écoute aussi 'invoice.payment_succeeded' pour les renouvellements
-    elif event['type'] in ['customer.subscription.updated', 'invoice.payment_succeeded']:
-        # On récupère l'objet abonnement
-        if event['type'] == 'invoice.payment_succeeded':
-            invoice = event['data']['object']
-            subscription_id = invoice.get('subscription')
-            if not subscription_id: return 'OK', 200 # Pas un renouvellement d'abonnement
-            subscription = stripe.Subscription.retrieve(subscription_id)
-        else: # C'est un 'customer.subscription.updated'
-            subscription = event['data']['object']
-
-        stripe_customer_id = subscription.get('customer')
-        if stripe_customer_id:
-            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
-            if user:
-                try:
-                    # On récupère le statut et le plan ACTUELS de l'abonnement sur Stripe
-                    current_status = subscription.get('status')
-                    price_id = subscription['items']['data'][0]['price']['id']
-                    current_plan = PLAN_PRICE_MAP.get(price_id)
-                    
-                    # On met à jour notre base de données pour qu'elle corresponde
-                    user.subscription_status = current_status # 'active', 'past_due', etc.
-                    user.subscription_plan = current_plan
-                    db.session.commit()
-                    print(f"WEBHOOK: Statut/Plan synchronisé pour {user.email}. Nouveau plan : '{current_plan}', Statut : '{current_status}'.")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"WEBHOOK ERREUR (subscription.updated/invoiced): {e}")
-
-    # CAS 3 : Un abonnement a été annulé
-    elif event['type'] == 'customer.subscription.deleted':
-        subscription = event['data']['object']
-        stripe_customer_id = subscription.get('customer')
-        if stripe_customer_id:
-            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
-            if user:
-                user.subscription_status = 'inactive'
-                user.subscription_plan = None
-                db.session.commit()
-                print(f"WEBHOOK: Abonnement DÉSACTIVÉ pour {user.email}")
-
-    # --- FIN DE LA LOGIQUE CORRIGÉE ---
-
-    return 'OK', 200
-
-
-# Dans app/routes.py, remplacez la fonction existante
-# Dans app/routes.py
-
-@main.route('/manage-subscription', methods=['POST'])
-@login_required
-def manage_subscription():
-    """Redirige l'utilisateur vers le Portail Client Stripe."""
-    
-    # Sécurité : on vérifie que c'est bien un utilisateur Stripe
-    if current_user.subscription_provider != 'stripe':
-        flash("La gestion en ligne n'est disponible que pour les abonnements par carte bancaire.", "info")
-        return redirect(url_for('main.dashboard'))
-
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
-    stripe_customer_id = current_user.stripe_customer_id
-
-    if not stripe_customer_id:
-        flash("ID client Stripe manquant. Veuillez contacter le support.", "danger")
-        return redirect(url_for('main.dashboard'))
-
-    try:
-        portal_session = stripe.billing_portal.Session.create(
-            customer=stripe_customer_id,
-            return_url=url_for('main.dashboard', _external=True),
-        )
-        return redirect(portal_session.url, code=303)
-        
-    except Exception as e:
-        current_app.logger.error(f"Erreur portail Stripe : {e}")
-        flash("Erreur lors de l'accès à la gestion de votre abonnement.", "danger")
-        return redirect(url_for('main.dashboard'))
 
 @main.route('/payment-success')
 @login_required
@@ -512,57 +407,31 @@ def payment_success():
     # ... (inchangé)
     return render_template('payment_success.html')
 
-# --- ROUTE MODIFIÉE ---
-@main.route('/create-checkout-session', methods=['POST'])
-@login_required
-def create_checkout_session():
-    # Récupère dynamiquement le tarif choisi par l'utilisateur
-    price_id = request.form.get('price_id')
-    if not price_id or price_id not in PLAN_PRICE_MAP:
-        flash("Veuillez sélectionner un forfait valide.", "danger")
-        return redirect(url_for('main.pricing'))
-
-    stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
-    try:
-        checkout_session = stripe.checkout.Session.create(
-            line_items=[{'price': price_id, 'quantity': 1}],
-            mode='subscription',
-            customer_email=current_user.email,
-            client_reference_id=current_user.id,
-            success_url=url_for('main.payment_success', _external=True),
-            cancel_url=url_for('main.pricing', _external=True), # Redirige vers la page de tarifs
-        )
-    except Exception as e:
-        current_app.logger.error(f"Erreur session Stripe: {e}")
-        flash("Erreur avec le service de paiement.", "danger")
-        return redirect(url_for('main.dashboard'))
-    return redirect(checkout_session.url, code=303)
-
-
 
 # Dans app/routes.py
-
 
 @main.route('/create-fedapay-checkout', methods=['POST'])
 @login_required
 def create_fedapay_checkout():
-    # 1. On récupère l'ID du plan envoyé par le formulaire
+    """Crée une transaction Fedapay en demandant la tokenisation de la carte."""
+    
+    # 1. On récupère l'ID du plan envoyé par le formulaire (ex: 'pro_monthly')
     plan_id = request.form.get('plan_id')
     
-    # 2. On vérifie que cet ID de plan est bien valide en le cherchant dans notre dictionnaire
+    # 2. On vérifie que ce plan est bien défini dans notre configuration
     if not plan_id or plan_id not in FEDAPAY_PLANS:
-        flash("Forfait de paiement Mobile Money non valide.", "danger")
+        flash("Forfait de paiement non valide.", "danger")
         return redirect(url_for('main.pricing'))
 
-    # 3. On récupère les informations du plan (montant, nom) depuis notre dictionnaire
+    # 3. On récupère les détails du plan depuis notre dictionnaire de configuration
     plan_info = FEDAPAY_PLANS[plan_id]
     amount = plan_info['amount']
     plan_name = plan_info['plan_name'] # 'pro' ou 'business'
     
-    # On stocke l'ID complet du plan (ex: 'pro_monthly') dans la session pour le retrouver au retour
+    # On stocke l'ID complet du plan dans la session pour le retrouver après le paiement
     session['pending_plan'] = plan_id
 
-    # Configuration de l'appel API Fedapay
+    # Configuration de l'appel à l'API Fedapay
     api_base_url = current_app.config['FEDAPAY_API_BASE']
     api_key = current_app.config['FEDAPAY_SECRET_KEY']
     url = f"{api_base_url}/transactions"
@@ -572,24 +441,25 @@ def create_fedapay_checkout():
         "Accept": "application/json"
     }
     
-    # Les données à envoyer à Fedapay
+    # Données envoyées à Fedapay pour créer la transaction
     data = {
         "description": f"Abonnement MinuteFoot - Forfait {plan_name.capitalize()}",
         "amount": amount,
         "currency": {"iso": "XOF"},
         "callback_url": url_for('main.fedapay_callback', _external=True),
-        "customer": { "email": current_user.email }
+        "customer": { "email": current_user.email },
+        "tokenize": True  # Clé essentielle pour demander la sauvegarde du moyen de paiement
     }
     
     try:
         response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
+        response.raise_for_status() # Lève une erreur si la requête HTTP échoue
         res_data = response.json()
         payment_url = res_data['v1/transaction']['payment_url']
         return redirect(payment_url)
     except Exception as e:
         current_app.logger.error(f"Erreur lors de la création de la transaction Fedapay: {e}")
-        flash("Une erreur est survenue avec le service de paiement Mobile Money. Veuillez réessayer.", "danger")
+        flash("Une erreur est survenue avec le service de paiement. Veuillez réessayer.", "danger")
     
     return redirect(url_for('main.pricing'))
 
@@ -638,14 +508,16 @@ def cancel_fedapay_subscription():
 
 # Dans app/routes.py
 
-# ... (autres routes)
-
 @main.route('/fedapay/callback')
 @login_required
 def fedapay_callback():
+    """
+    Gère le retour de Fedapay après un paiement.
+    Vérifie le statut, met à jour l'abonnement en utilisant la configuration des plans.
+    """
     transaction_id = request.args.get('id')
     if not transaction_id:
-        flash("Erreur lors du retour du service de paiement.", "danger")
+        flash("ID de transaction manquant lors du retour du service de paiement.", "danger")
         return redirect(url_for('main.dashboard'))
     
     api_base_url = current_app.config['FEDAPAY_API_BASE']
@@ -662,38 +534,42 @@ def fedapay_callback():
         transaction_status = transaction_data['status']
         
         if transaction_status == 'approved':
+            # 1. On récupère l'ID du plan stocké dans la session (ex: 'pro_monthly')
             plan_id = session.pop('pending_plan', 'unknown')
             
             if plan_id not in FEDAPAY_PLANS:
                 flash("Erreur lors de la validation de votre forfait. Veuillez contacter le support.", "danger")
                 return redirect(url_for('main.dashboard'))
 
+            # 2. On récupère les informations de ce plan depuis notre dictionnaire centralisé
             plan_info = FEDAPAY_PLANS[plan_id]
             plan_name = plan_info['plan_name'] # 'pro' ou 'business'
+            duration_days = plan_info['duration_days'] # 30 ou 365
 
-            # Mise à jour de l'utilisateur avec les bonnes informations
+            # 3. Mise à jour complète de l'utilisateur
             current_user.subscription_status = 'active'
             current_user.subscription_plan = plan_name
             current_user.subscription_provider = 'fedapay'
             current_user.trial_ends_at = None
-            
-            # Calcul de la date d'expiration en fonction du nom du plan
-            if 'annual' in plan_id:
-                current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=366)
-            else:
-                current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=31)
-            
-            # Enregistrement de l'ID client Fedapay
+            current_user.next_billing_date = (datetime.utcnow() + timedelta(days=duration_days)).date()
+
+            # Enregistrement de l'ID client Fedapay et du token de paiement
             customer_id = transaction_data.get('customer_id')
             if customer_id:
                 current_user.provider_customer_id = str(customer_id)
+            try:
+                token_id = transaction_data.get('token', {}).get('id')
+                if token_id:
+                    current_user.fedapay_token = token_id
+            except Exception:
+                current_app.logger.warning(f"Token Fedapay non trouvé pour la transaction {transaction_id}")
             
-            # Création de la notification
+            # 4. Création de la notification
             amount_paid = transaction_data.get('amount')
             notif_content = f"Merci ! Votre abonnement au forfait {plan_name.capitalize()} est actif (Montant payé: {amount_paid} XOF)."
-            
-            from .models import Notification
             db.session.add(Notification(user_id=current_user.id, content=notif_content))
+
+            # 5. On valide toutes les modifications
             db.session.commit()
             
             return redirect(url_for('main.payment_success'))
