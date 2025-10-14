@@ -17,6 +17,7 @@ from app import scheduler, db
 from app.models import User, FacebookPage, Broadcast, PublishedNews
 from app.services import EncryptionService
 from .plans import FEDAPAY_PLANS
+import hashlib
 # --- Configuration Globale du Scraping ---
 LIVE_URL = "https://www.matchendirect.fr/live-score/"
 FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
@@ -25,7 +26,7 @@ FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIVE_DATA_FILE = os.path.join(BASE_DIR, 'scores.json')
 PUBLISHED_FINISHED_FILE = os.path.join(BASE_DIR, 'published_finished.json')
-
+SUMMARY_HASH_FILE = os.path.join(BASE_DIR, 'summary_hash.json')
 # --- Gestion de l'instance de l'application ---
 _app = None
 
@@ -317,15 +318,43 @@ def scrape_football_news(driver):
 
 # Dans app/tasks.py
 
+# --- FONCTION DE RÉSUMÉ CORRIGÉE ---
 def post_live_scores_summary():
     """
-    Tâche périodique qui publie un résumé de tous les matchs en cours.
+    Tâche périodique qui publie un résumé des matchs en cours,
+    UNIQUEMENT si l'état des scores a changé depuis le dernier résumé.
     """
     if _app is None: return
     with _app.app_context():
-        print(f"\n--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Démarrage de la publication du résumé des scores ---")
+        print(f"\n--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Démarrage de la vérification pour le résumé des scores ---")
 
-        # On récupère la liste des pages éligibles (comme dans les autres tâches)
+        scores = load_from_json(LIVE_DATA_FILE)
+        if not scores:
+            print("Aucun score en direct, pas de résumé à publier.")
+            return
+
+        current_summary_list = []
+        for match_key, data in sorted(scores.items()):
+            if data.get("statut") != "TER":
+                current_summary_list.append(f"{match_key}:{data['score']}:{data['minute']}")
+        
+        if not current_summary_list:
+            print("Aucun match en cours, pas de résumé à publier.")
+            save_to_json({'last_hash': ''}, SUMMARY_HASH_FILE)
+            return
+
+        current_summary_string = "|".join(current_summary_list)
+        current_hash = hashlib.md5(current_summary_string.encode('utf-8')).hexdigest()
+
+        last_summary_data = load_from_json(SUMMARY_HASH_FILE)
+        last_hash = last_summary_data.get('last_hash', '')
+
+        if current_hash == last_hash:
+            print(f"L'état des scores n'a pas changé. Aucune publication de résumé nécessaire.")
+            return
+        
+        print(f"L'état des scores a changé ! Publication du nouveau résumé.")
+
         now = datetime.utcnow()
         active_pages = db.session.query(FacebookPage).join(User).filter(
             FacebookPage.is_active == True,
@@ -340,35 +369,18 @@ def post_live_scores_summary():
             print("Aucune page active pour le résumé. Tâche terminée.")
             return
 
-        # On charge l'état actuel des scores depuis le fichier JSON
-        scores = load_from_json(LIVE_DATA_FILE)
-        if not scores:
-            print("Aucun score en direct à résumer.")
-            return
-
-        # On construit le message de résumé (logique de votre script original)
-        message, matchs_en_cours = "📊 Scores en direct :\n\n", 0
+        message = "📊 Scores en direct :\n\n"
         for match_key, data in scores.items():
             if data.get("statut") != "TER":
-                eq1, eq2 = data.get("eq1"), data.get("eq2")
-                if not eq1 or not eq2: continue # Sécurité
-                
-                ligne = f"{eq1} {data['score']} {eq2}"
-                
-                if data.get('statut') == "MT":
-                    ligne += " (MT)"
-                elif "'" in data.get('minute', ''):
-                    ligne += f" ({data['minute']})"
-                    
+                ligne = f"{data['eq1']} {data['score']} {data['eq2']}"
+                if data.get('statut') == "MT": ligne += " (MT)"
+                elif "'" in data.get('minute', ''): ligne += f" ({data['minute']})"
                 message += f"◉ {ligne}\n"
-                matchs_en_cours += 1
         
-        # On ne publie que s'il y a au moins un match en cours
-        if matchs_en_cours > 0:
-            encryption_service = EncryptionService()
-            broadcast_to_facebook(active_pages, message.strip(), encryption_service)
-        else:
-            print("Aucun match en cours à résumer.")
+        encryption_service = EncryptionService()
+        broadcast_to_facebook(active_pages, message.strip(), encryption_service)
+
+        save_to_json({'last_hash': current_hash}, SUMMARY_HASH_FILE)
         
         print("--- Publication du résumé terminée ---")
 
@@ -649,7 +661,7 @@ scheduler.add_job(
     id='centralized_checks_job', 
     func=run_centralized_checks, 
     trigger='interval', 
-    minutes=2,
+    seconds=45,
     replace_existing=True
 )
 
