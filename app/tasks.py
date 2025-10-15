@@ -1,84 +1,54 @@
-# app/tasks.py (Version Centralisée Complète)
+# app/tasks.py (Version Finale - Base de Données)
 
-import time
-import json
-import os
+import time, hashlib, requests
 from bs4 import BeautifulSoup
+from datetime import datetime, date, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from facebook import GraphAPI
 from selenium.common.exceptions import TimeoutException
-from datetime import datetime, date, timedelta
-import requests
+from facebook import GraphAPI
+
 from app import scheduler, db
-from app.models import User, FacebookPage, Broadcast, PublishedNews
+from app.models import User, FacebookPage, Broadcast, PublishedNews, GlobalMatchState, GlobalPublishedMatch, GlobalState
 from app.services import EncryptionService
-from .plans import FEDAPAY_PLANS
-import hashlib
-# --- Configuration Globale du Scraping ---
+from app.plans import FEDAPAY_PLANS
+
+# --- Config ---
+_app = None
 LIVE_URL = "https://www.matchendirect.fr/live-score/"
 FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
-
-# --- GESTION DE L'ÉTAT CENTRALISÉ (Fichiers JSON à la racine du projet) ---
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LIVE_DATA_FILE = os.path.join(BASE_DIR, 'scores.json')
-PUBLISHED_FINISHED_FILE = os.path.join(BASE_DIR, 'published_finished.json')
-SUMMARY_HASH_FILE = os.path.join(BASE_DIR, 'summary_hash.json')
-# --- Gestion de l'instance de l'application ---
-_app = None
 
 def init_app(app):
     global _app
     _app = app
 
 # =============================================================================
-# === FONCTIONS UTILITAIRES DE BASE ===========================================
+# === FONCTIONS UTILITAIRES DE SCRAPING =======================================
 # =============================================================================
 
-
-
 def get_browser():
-    """Initialise et retourne une instance du navigateur Selenium plus robuste."""
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    
-    # --- AJOUTS POUR LA STABILITÉ ET LA PERFORMANCE ---
-    # 1. Désactive le chargement des images. C'est la modification la plus efficace.
     options.add_argument('--blink-settings=imagesEnabled=false')
-    # 2. Options supplémentaires pour éviter les plantages liés à l'interface graphique
     options.add_argument('--disable-extensions')
     options.add_argument('--disable-infobars')
     options.add_argument('--disable-popup-blocking')
-    # --- FIN DES AJOUTS ---
-    
     try:
         service = Service() 
         driver = webdriver.Chrome(service=service, options=options)
-        # On définit un timeout de page global pour éviter que driver.get() ne bloque indéfiniment
-        driver.set_page_load_timeout(60) # 60 secondes max pour charger une page
+        driver.set_page_load_timeout(60)
         return driver
     except Exception as e:
         print(f"[ERREUR SELENIUM] Impossible de démarrer le navigateur : {e}")
         return None
 
-def load_from_json(filepath):
-    """Charge les données depuis un fichier JSON."""
-    default = [] if "published" in filepath else {}
-    if not os.path.exists(filepath): return default
-    try:
-        with open(filepath, "r", encoding='utf-8') as f: return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError): return default
-
-def save_to_json(data, filepath):
-    """Sauvegarde les données dans un fichier JSON."""
-    with open(filepath, "w", encoding='utf-8') as f: json.dump(data, f, indent=4)
 
 
 
@@ -92,18 +62,15 @@ def get_live_scores(driver):
         driver.get(LIVE_URL)
         WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "td.lm3")))
         soup = BeautifulSoup(driver.page_source, "html.parser")
-        match_blocks = soup.select("td.lm3")
-        for match in match_blocks:
+        for match in soup.select("td.lm3"):
             try:
                 eq1, eq2 = match.select_one("span.lm3_eq1").text.strip(), match.select_one("span.lm3_eq2").text.strip()
                 score1, score2 = match.select_one("span.scored_1").text.strip(), match.select_one("span.scored_2").text.strip()
                 row = match.find_parent("tr")
                 minute = row.select_one("td.lm2").text.strip() if row.select_one("td.lm2") else ""
-                link = row.select_one("a")
-                url = f"https://www.matchendirect.fr{link.get('href')}" if link and link.get('href') else None
-                statut = "MT" if "mi-temps" in minute.lower() or "mt" in minute.lower() else ("TER" if "ter" in minute.lower() else "")
-                key = f"{eq1} vs {eq2}"
-                scores[key] = {"score": f"{score1} - {score2}", "statut": statut, "minute": minute, "eq1": eq1, "eq2": eq2, "url": url}
+                url = f"https://www.matchendirect.fr{row.select_one('a').get('href')}" if row.select_one('a') else None
+                statut = "MT" if "mi-temps" in minute.lower() else ("TER" if "ter" in minute.lower() else "")
+                scores[f"{eq1} vs {eq2}"] = {"score": f"{score1.strip()} - {score2.strip()}", "statut": statut, "minute": minute, "eq1": eq1, "eq2": eq2, "url": url}
             except Exception: pass
     except Exception as e: print(f"[ERREUR SELENIUM - get_live_scores] {e}")
     print(f"✅ {len(scores)} scores en direct trouvés.")
@@ -164,37 +131,24 @@ def get_penalty_shootout_score(driver, match_url):
     return None
 
 
-def broadcast_to_facebook(active_pages, message, encryption_service):
-    """Enregistre le message dans l'historique et le publie sur les pages actives."""
-    
-    # --- DÉBUT DE L'AJOUT ---
-    # On enregistre le message dans la base de données AVANT de l'envoyer.
-    # Le _app.app_context() est nécessaire car cette fonction est appelée
-    # depuis la tâche principale qui a déjà le contexte.
+def broadcast_to_facebook(active_pages, message):
     try:
-        new_broadcast = Broadcast(content=message)
-        db.session.add(new_broadcast)
+        db.session.add(Broadcast(content=message))
         db.session.commit()
         print(f"[HISTORIQUE] Message enregistré: {message[:60]}...")
     except Exception as e:
         db.session.rollback()
-        print(f"[HISTORIQUE ERREUR] Impossible d'enregistrer le message : {e}")
-        # On continue même si l'enregistrement échoue, la publication est plus importante.
-    # --- FIN DE L'AJOUT ---
-    
-    if not active_pages:
-        print(f"[BROADCAST IGNORÉ] Aucun auditeur actif pour le message : {message[:60]}...")
-        return
-        
-    print(f"[BROADCAST] Envoi du message à {len(active_pages)} page(s) : {message[:60]}...")
+        _app.logger.error(f"[HISTORIQUE ERREUR] {e}")
+    if not active_pages: return
+    print(f"[BROADCAST] Envoi à {len(active_pages)} page(s)...")
+    encryption_service = EncryptionService()
     for page in active_pages:
         try:
-            decrypted_token = encryption_service.decrypt(page.encrypted_page_access_token)
-            graph = GraphAPI(access_token=decrypted_token)
+            graph = GraphAPI(access_token=encryption_service.decrypt(page.encrypted_page_access_token))
             graph.put_object(parent_object=page.facebook_page_id, connection_name="feed", message=message)
             print(f"  -> Succès pour '{page.page_name}'")
         except Exception as e:
-            print(f"  -> ERREUR pour '{page.page_name}': {e}")
+            print(f"  -> ERREUR FB pour '{page.page_name}': {e}")
 # Dans app/tasks.py
 
 def check_expired_subscriptions():
@@ -320,131 +274,100 @@ def scrape_football_news(driver):
 
 # --- FONCTION DE RÉSUMÉ CORRIGÉE ---
 def post_live_scores_summary():
-    """
-    Tâche périodique qui publie un résumé des matchs en cours,
-    UNIQUEMENT si l'état des scores a changé depuis le dernier résumé.
-    """
     if _app is None: return
     with _app.app_context():
-        print(f"\n--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Démarrage de la vérification pour le résumé des scores ---")
+        scores_from_db = GlobalMatchState.query.all()
+        current_summary_list = sorted([f"{s.match_key}:{s.score}" for s in scores_from_db if s.statut != "TER"])
+        if not current_summary_list: return
 
-        scores = load_from_json(LIVE_DATA_FILE)
-        if not scores:
-            print("Aucun score en direct, pas de résumé à publier.")
-            return
-
-        current_summary_list = []
-        for match_key, data in sorted(scores.items()):
-            if data.get("statut") != "TER":
-                current_summary_list.append(f"{match_key}:{data['score']}:{data['minute']}")
-        
-        if not current_summary_list:
-            print("Aucun match en cours, pas de résumé à publier.")
-            save_to_json({'last_hash': ''}, SUMMARY_HASH_FILE)
-            return
-
-        current_summary_string = "|".join(current_summary_list)
-        current_hash = hashlib.md5(current_summary_string.encode('utf-8')).hexdigest()
-
-        last_summary_data = load_from_json(SUMMARY_HASH_FILE)
-        last_hash = last_summary_data.get('last_hash', '')
+        current_hash = hashlib.md5("|".join(current_summary_list).encode('utf-8')).hexdigest()
+        last_hash_obj = GlobalState.query.filter_by(key='last_summary_hash').first()
+        last_hash = last_hash_obj.value if last_hash_obj else ''
 
         if current_hash == last_hash:
-            print(f"L'état des scores n'a pas changé. Aucune publication de résumé nécessaire.")
+            print("Résumé scores inchangé.")
             return
         
-        print(f"L'état des scores a changé ! Publication du nouveau résumé.")
-
-        now = datetime.utcnow()
         active_pages = db.session.query(FacebookPage).join(User).filter(
             FacebookPage.is_active == True,
-            db.or_(
-                User.role == 'superadmin',
-                User.subscription_status == 'active',
-                User.trial_ends_at > now
-            )
+            db.or_(User.role == 'superadmin', User.subscription_status == 'active', User.trial_ends_at > datetime.utcnow())
         ).all()
-
-        if not active_pages:
-            print("Aucune page active pour le résumé. Tâche terminée.")
-            return
+        if not active_pages: return
 
         message = "📊 Scores en direct :\n\n"
-        for match_key, data in scores.items():
-            if data.get("statut") != "TER":
-                ligne = f"{data['eq1']} {data['score']} {data['eq2']}"
-                if data.get('statut') == "MT": ligne += " (MT)"
-                elif "'" in data.get('minute', ''): ligne += f" ({data['minute']})"
+        for s in sorted(scores_from_db, key=lambda x: x.match_key):
+            if s.statut != "TER":
+                ligne = f"{s.eq1} {s.score} {s.eq2}"
+                if s.statut == "MT": ligne += " (MT)"
+                elif "'" in s.minute: ligne += f" ({s.minute})"
                 message += f"◉ {ligne}\n"
         
-        encryption_service = EncryptionService()
-        broadcast_to_facebook(active_pages, message.strip(), encryption_service)
+        broadcast_to_facebook(active_pages, message.strip())
 
-        save_to_json({'last_hash': current_hash}, SUMMARY_HASH_FILE)
-        
-        print("--- Publication du résumé terminée ---")
+        if last_hash_obj: last_hash_obj.value = current_hash
+        else: db.session.add(GlobalState(key='last_summary_hash', value=current_hash))
+        db.session.commit()
 
 
+
+# Dans app/tasks.py
 
 def run_centralized_checks():
+    """
+    Tâche principale qui scrape les scores en direct et les matchs terminés,
+    compare l'état avec la base de données, et diffuse les changements.
+    """
     if _app is None: return
     with _app.app_context():
         start_time = time.time()
-        print(f"\n--- [{time.strftime('%Y-%m-%d %H:%M:%S')}] Démarrage du cycle de vérification centralisé ---")
+        print(f"\n--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Démarrage du cycle de vérification des scores ---")
         
-        now = datetime.utcnow()
         active_pages = db.session.query(FacebookPage).join(User).filter(
             FacebookPage.is_active == True,
-            db.or_(
-                User.role == 'superadmin',
-                User.subscription_status == 'active',
-                User.trial_ends_at > now
-            )
+            db.or_(User.role == 'superadmin', User.subscription_status == 'active', User.trial_ends_at > datetime.utcnow())
         ).all()
 
         if not active_pages:
-            print("Aucune page active ou en période d'essai. Le bot tourne en silence pour maintenir l'état à jour.")
+            print("Aucune page active ou en période d'essai pour la publication.")
         else:
-            print(f"{len(active_pages)} page(s) écoute(nt) le flux de publication.")
+            print(f"{len(active_pages)} page(s) éligibles pour la publication.")
 
-        encryption_service = EncryptionService()
         driver = get_browser()
         if not driver: return
 
         try:
-            # --- LOGIQUE DE VOTRE SCRIPT ORIGINAL ---
+            # --- 1. TRAITEMENT DES MATCHS EN DIRECT ---
+            old_scores_from_db = GlobalMatchState.query.all()
+            old_scores = {s.match_key: s for s in old_scores_from_db}
+            new_scores_data = get_live_scores(driver)
             
-            # 1. Traitement des matchs en direct
-            old_scores = load_from_json(LIVE_DATA_FILE)
-            new_scores = get_live_scores(driver)
-            
-            for match_key, new_data in new_scores.items():
-                new_score, new_statut, minute, eq1, eq2, url = new_data.values()
+            for match_key, new_data in new_scores_data.items():
+                old_state = old_scores.get(match_key)
                 
-                if match_key not in old_scores:
-                    if new_score != " - " and "'" in minute:
-                        message = f"⏱️ {minute}\n{eq1} {new_score} {eq2}"
-                        broadcast_to_facebook(active_pages, message, encryption_service)
+                if not old_state:
+                    if new_data['score'].replace(" ","") != "-" and "'" in new_data['minute']:
+                        message = f"⏱️ {new_data['minute']}\n{new_data['eq1']} {new_data['score']} {new_data['eq2']}"
+                        broadcast_to_facebook(active_pages, message)
                     continue
 
-                old_data = old_scores[match_key]
-                changement_score = new_score != old_data.get("score")
-                changement_statut_mt = new_statut == "MT" and old_data.get("statut") != "MT"
+                changement_score = new_data['score'] != old_state.score
+                changement_statut_mt = new_data['statut'] == "MT" and old_state.statut != "MT"
 
                 if changement_statut_mt:
-                    msg = f"⏸️ Mi-temps\n{eq1} {new_score} {eq2}"
-                    stats = get_match_stats(driver, get_stat_url(url))
-                    broadcast_to_facebook(active_pages, f"{msg}\n\n{stats}".strip(), encryption_service)
+                    msg = f"⏸️ Mi-temps\n{new_data['eq1']} {new_data['score']} {new_data['eq2']}"
+                    stats = get_match_stats(driver, get_stat_url(new_data['url']))
+                    broadcast_to_facebook(active_pages, f"{msg}\n\n{stats}".strip())
+
                 elif changement_score:
                     try:
-                        old_score_str = old_data.get("score")
-                        if not old_score_str or "-" not in old_score_str or "-" not in new_score: continue
-                        s1_old, s2_old = map(int, old_score_str.split(" - "))
-                        s1_new, s2_new = map(int, new_score.split(" - "))
+                        if not old_state.score or "-" not in old_state.score or "-" not in new_data['score']: continue
+                        s1_old, s2_old = map(int, old_state.score.replace(" ","").split("-"))
+                        s1_new, s2_new = map(int, new_data['score'].replace(" ","").split("-"))
 
-                        if s1_new > s1_old or s2_new > s2_old: # But marqué
-                            equipe_but = eq1 if s1_new > s1_old else eq2
-                            buteur_brut, minute_but = get_match_details(driver, url)
+                        if s1_new > s1_old or s2_new > s2_old:
+                            equipe_but = new_data['eq1'] if s1_new > s1_old else new_data['eq2']
+                            buteur_brut, minute_but = get_match_details(driver, new_data['url'])
+                            minute_affiche = minute_but if minute_but else new_data['minute']
                             msg_buteur = ""
                             if buteur_brut:
                                 if buteur_brut.startswith('('): msg_buteur = f"🚀 Buuuut de {equipe_but} !"
@@ -453,49 +376,66 @@ def run_centralized_checks():
                                     msg_buteur = f"🚀 Buuuut de {nom_propre} ({equipe_but}) !"
                                 else: msg_buteur = f"🚀 Buuuut de {buteur_brut} ({equipe_but}) !"
                             else: msg_buteur = f"🚀 Buuuut de {equipe_but} !"
-                            minute_affiche = minute_but if minute_but else minute
-                            broadcast_to_facebook(active_pages, f"{msg_buteur}\n⏱️ {minute_affiche}\n{eq1} {new_score} {eq2}", encryption_service)
-                        elif s1_new < s1_old or s2_new < s2_old: # But refusé
-                            msg = f"❌ BUT REFUSÉ pour {eq1 if s1_new < s1_old else eq2} après consultation de la VAR.\n\nLe score revient à {eq1} {new_score} {eq2}"
-                            broadcast_to_facebook(active_pages, msg, encryption_service)
+                            broadcast_to_facebook(active_pages, f"{msg_buteur}\n⏱️ {minute_affiche}\n{new_data['eq1']} {new_data['score']} {new_data['eq2']}")
+                        
+                        elif s1_new < s1_old or s2_new < s2_old:
+                            equipe_concernee = new_data['eq1'] if s1_new < s1_old else new_data['eq2']
+                            msg = f"❌ BUT REFUSÉ pour {equipe_concernee} après consultation de la VAR.\n\nLe score revient à {new_data['eq1']} {new_data['score']} {new_data['eq2']}"
+                            broadcast_to_facebook(active_pages, msg)
                     except (ValueError, IndexError): continue
             
-            save_to_json(new_scores, LIVE_DATA_FILE)
+            # Mise à jour de la BDD pour les scores en direct
+            current_keys = set(new_scores_data.keys())
+            for state in old_scores_from_db:
+                if state.match_key not in current_keys: db.session.delete(state)
+            for match_key, data in new_scores_data.items():
+                state = old_scores.get(match_key)
+                if state:
+                    state.score, state.statut, state.minute, state.url, state.eq1, state.eq2 = data['score'], data['statut'], data['minute'], data['url'], data['eq1'], data['eq2']
+                else:
+                    db.session.add(GlobalMatchState(match_key=match_key, **data))
+            db.session.commit()
 
-            # 2. Traitement des matchs terminés
-            previously_published_ids = set(load_from_json(PUBLISHED_FINISHED_FILE))
+            # --- 2. TRAITEMENT DES MATCHS TERMINÉS ---
+            previously_published_ids = {p.match_identifier for p in GlobalPublishedMatch.query.all()}
             driver.get(FINISHED_URL)
             WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "tr[data-matchid]")))
             soup = BeautifulSoup(driver.page_source, "html.parser")
-            match_rows = soup.select("tr[data-matchid]")
             
-            for row in match_rows:
+            for row in soup.select("tr[data-matchid]"):
                 if "TER" in (row.select_one("td.lm2").text or ""):
                     match_id = row['data-matchid']
                     if match_id not in previously_published_ids:
                         try:
-                            eq1, eq2, score = row.select_one("span.lm3_eq1").text.strip(), row.select_one("span.lm3_eq2").text.strip(), row.select_one("span.lm3_score").text.strip()
+                            eq1 = row.select_one("span.lm3_eq1").text.strip()
+                            eq2 = row.select_one("span.lm3_eq2").text.strip()
+                            score = row.select_one("span.lm3_score").text.strip()
                             url = f"https://www.matchendirect.fr{row.select_one('a.ga4-matchdetail').get('href')}"
                             
                             print(f"✨ Nouveau match terminé détecté: {eq1} vs {eq2}")
                             msg = f"🔚 Terminé\n{eq1} {score} {eq2}"
+                            
                             penalty_text = get_penalty_shootout_score(driver, url)
                             if penalty_text: msg += f"\n{penalty_text}"
                             
                             stats = get_match_stats(driver, get_stat_url(url))
-                            broadcast_to_facebook(active_pages, f"{msg}\n\n{stats}".strip(), encryption_service)
+                            full_message = f"{msg}\n\n{stats}".strip()
                             
-                            previously_published_ids.add(match_id)
-                        except Exception as e: print(f"❌ Erreur sur traitement match terminé {match_id}: {e}")
-            
-            save_to_json(list(previously_published_ids), PUBLISHED_FINISHED_FILE)
-            
+                            broadcast_to_facebook(active_pages, full_message)
+                            
+                            db.session.add(GlobalPublishedMatch(match_identifier=match_id))
+                            db.session.commit()
+                        except Exception as e: 
+                            print(f"❌ Erreur sur traitement du match terminé {match_id}: {e}")
+                            db.session.rollback()
+        
         except Exception as e:
             print(f"ERREUR MAJEURE dans run_centralized_checks: {e}")
+            db.session.rollback()
         finally:
             driver.quit()
             duration = time.time() - start_time
-            print(f"--- Cycle centralisé terminé en {duration:.2f} secondes ---")
+            print(f"--- Cycle des scores terminé en {duration:.2f} secondes ---")
 
 
 def charge_with_fedapay_token(user, plan_info):

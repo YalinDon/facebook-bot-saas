@@ -1,10 +1,5 @@
-# app/models.py
+# app/models.py (Version Finale pour Production)
 
-# =============================================================================
-# === MODÈLE UTILISATEUR ======================================================
-# =============================================================================
-# app/models.py
-# (Assurez-vous que tous les imports nécessaires sont en haut de votre fichier)
 from . import db
 from datetime import datetime
 from flask_login import UserMixin
@@ -12,36 +7,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask import current_app
 from itsdangerous import URLSafeTimedSerializer as Serializer
 
-# ... (les autres classes de modèles comme FacebookPage, etc.)
-
-
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
-
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(50), nullable=False, default='user')
-    # Statut de l'abonnement, mis à jour par le webhook Stripe
     subscription_status = db.Column(db.String(20), nullable=False, default='inactive')
-
-    
-    # Date de création du compte
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    
-    # Date de fin de la période d'essai
     trial_ends_at = db.Column(db.DateTime, nullable=True)
-    
-    # --- DÉBUT DE L'AJOUT ---
-    # Nouvelle colonne pour stocker le type de forfait (ex: 'pro', 'business')
     subscription_plan = db.Column(db.String(50), nullable=True)
-    # Relation avec les pages Facebook de l'utilisateur
     subscription_provider = db.Column(db.String(50), nullable=True)
-    fedapay_token = db.Column(db.String(255), nullable=True) # Pour stocker le token de la carte
-    next_billing_date = db.Column(db.Date, nullable=True) # Pour savoir quand prélever    
+    fedapay_token = db.Column(db.String(255), nullable=True)
+    next_billing_date = db.Column(db.Date, nullable=True)
     pages = db.relationship('FacebookPage', backref='owner', lazy=True, cascade="all, delete-orphan")
+    notifications = db.relationship('Notification', backref='user', lazy=True, cascade="all, delete-orphan")
 
     @property
     def is_superadmin(self):
@@ -56,100 +38,87 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    # --- Les méthodes pour la fonctionnalité "mot de passe oublié" restent INCHANGÉES ---
-    
     def get_reset_token(self):
-        """Génère un jeton sécurisé pour la réinitialisation du mot de passe."""
         s = Serializer(current_app.config['SECRET_KEY'])
         return s.dumps({'user_id': self.id})
 
     @staticmethod
     def verify_reset_token(token, expires_sec=1800):
-        """Vérifie un jeton et retourne l'utilisateur si le jeton est valide et non expiré."""
         s = Serializer(current_app.config['SECRET_KEY'])
         try:
-            # Tente de charger le jeton en vérifiant sa date d'expiration (1800s = 30 minutes)
             user_id = s.loads(token, max_age=expires_sec)['user_id']
         except Exception:
-            # Si le chargement échoue (jeton invalide, expiré, etc.), retourne None
             return None
-        # Si le jeton est valide, retourne l'objet User correspondant
         return User.query.get(user_id)
-        
-    # --- FIN DES AJOUTS ---
 
-# =============================================================================
-# === MODÈLE PAGE FACEBOOK ====================================================
-# =============================================================================
 class FacebookPage(db.Model):
     __tablename__ = 'facebook_page'
-
     id = db.Column(db.Integer, primary_key=True)
-    
-    # Lien vers l'utilisateur propriétaire
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
-    
-    # Informations de la page Facebook
     facebook_page_id = db.Column(db.String(100), nullable=False, unique=True)
     page_name = db.Column(db.String(200), nullable=False)
-    
-    # Le token d'accès chiffré, nécessaire pour publier
     encrypted_page_access_token = db.Column(db.Text, nullable=False)
-    
-    # Booléen pour que l'utilisateur puisse activer/désactiver le bot pour cette page
     is_active = db.Column(db.Boolean, default=False, nullable=False)
 
     def __repr__(self):
-        return f'<Page {self.page_name} ({self.facebook_page_id})>'
+        return f'<Page {self.page_name}>'
     
-    
-class Broadcast(db.Model):
-    __tablename__ = 'broadcast'
-
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-
-    def __repr__(self):
-        return f'<Broadcast {self.id} - {self.content[:30]}>'
-        
-        
-# Dans app/models.py
-
-# ... (classes User, FacebookPage, etc.)
-
 class Notification(db.Model):
     __tablename__ = 'notification'
-
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     content = db.Column(db.Text, nullable=False)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-    
-    # Relation pour accéder facilement à l'utilisateur depuis une notification
-    user = db.relationship('User', backref=db.backref('notifications', lazy=True, cascade="all, delete-orphan"))
 
     def __repr__(self):
-        return f'<Notification pour l\'utilisateur {self.user_id}>'   
-    
-# Dans app/models.py
+        return f'<Notification pour {self.user_id}>'
 
+class Broadcast(db.Model):
+    __tablename__ = 'broadcast'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f'<Broadcast {self.id}>'
+        
 class PublishedNews(db.Model):
     __tablename__ = 'published_news'
-    
     id = db.Column(db.Integer, primary_key=True)
-    # L'URL peut être vide pour les actus manuelles
     article_url = db.Column(db.String(512), unique=True, nullable=True) 
     title = db.Column(db.String(512), nullable=False)
     content = db.Column(db.Text, nullable=True)
     published_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    # --- NOUVELLE COLONNE ---
-    # Pour distinguer les actus du scraper de celles de l'admin
-    source = db.Column(db.String(50), nullable=False, default='scraper') # 'scraper' ou 'admin'
-    # --- FIN DE L'AJOUT ---
+    source = db.Column(db.String(50), nullable=False, default='scraper')
 
     def __repr__(self):
-        return f'<PublishedNews {self.title[:50]}>'   
-    
+        return f'<PublishedNews {self.title[:50]}>'
+
+# --- NOUVELLES TABLES POUR LA MÉMOIRE DU BOT ---
+
+class GlobalState(db.Model):
+    """Table de type clé-valeur pour stocker l'état global, comme le hash du résumé."""
+    __tablename__ = 'global_state'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=True)
+
+class GlobalMatchState(db.Model):
+    """Remplace scores.json. Stocke l'état des matchs en direct."""
+    __tablename__ = 'global_match_state'
+    id = db.Column(db.Integer, primary_key=True)
+    match_key = db.Column(db.String(255), unique=True, nullable=False)
+    score = db.Column(db.String(20))
+    statut = db.Column(db.String(50))
+    minute = db.Column(db.String(50))
+    url = db.Column(db.String(512))
+    eq1 = db.Column(db.String(100))
+    eq2 = db.Column(db.String(100))
+
+class GlobalPublishedMatch(db.Model):
+    """Remplace published_finished.json. Stocke les ID des matchs terminés déjà publiés."""
+    __tablename__ = 'global_published_match'
+    id = db.Column(db.Integer, primary_key=True)
+    match_identifier = db.Column(db.String(255), unique=True, nullable=False)
+    published_at = db.Column(db.DateTime, default=datetime.utcnow)
