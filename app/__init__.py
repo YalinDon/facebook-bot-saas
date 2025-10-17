@@ -55,7 +55,7 @@ def create_app():
     moment.init_app(app)
     # On importe les modèles ici pour éviter les importations circulaires.
     from .models import User, Notification # <-- AJOUT : On importe Notification
-
+    
     # --- DÉBUT DE LA MODIFICATION ---
     # On regroupe toutes les variables globales dans un seul context_processor.
     @app.context_processor
