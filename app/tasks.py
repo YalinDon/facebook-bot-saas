@@ -534,7 +534,6 @@ def publish_news_for_business_users():
             return
 
         print(f"Ciblage de {len(business_pages)} page(s) pour la publication des actualités.")
-        encryption_service = EncryptionService()
         driver = get_browser()
         if not driver: return
 
@@ -567,7 +566,7 @@ def publish_news_for_business_users():
                 # 6. On utilise broadcast_to_facebook. Cette fonction va :
                 #    a) Enregistrer le message dans la table 'Broadcast'
                 #    b) Publier le message sur toutes les pages 'business_pages'
-                broadcast_to_facebook(business_pages, message, encryption_service)
+                broadcast_to_facebook(business_pages, message)
                 
                 # 7. On enregistre la news dans la table de contrôle 'PublishedNews' 
                 #    pour s'assurer qu'elle ne sera plus jamais traitée.
