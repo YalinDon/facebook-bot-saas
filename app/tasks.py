@@ -1,6 +1,7 @@
 # app/tasks.py (Version Finale - Base de Données)
 
 import time, hashlib, requests
+import traceback
 from bs4 import BeautifulSoup
 from datetime import datetime, date, timedelta
 from selenium import webdriver
@@ -131,24 +132,61 @@ def get_penalty_shootout_score(driver, match_url):
     return None
 
 
-def broadcast_to_facebook(active_pages, message):
+def broadcast_to_facebook(*args):
+    """
+    Fonction de débogage pour attraper les appels incorrects et tracer leur origine.
+    """
+    print("\n" + "="*50)
+    print("!!! DÉBOGAGE : FONCTION broadcast_to_facebook APPELÉE !!!")
+    
+    # 1. On affiche le nombre d'arguments reçus
+    print(f"-> Nombre d'arguments reçus : {len(args)}")
+    
+    # 2. On affiche la pile d'appels pour savoir QUI a appelé cette fonction
+    print("-> Origine de l'appel (pile d'appels) :")
+    # traceback.format_stack() va imprimer le chemin exact depuis la tâche jusqu'ici
+    stack = traceback.format_stack()
+    # On affiche les 2-3 dernières lignes pertinentes de la pile d'appels
+    for line in stack[-4:-1]: # Les dernières lignes sont les plus pertinentes
+        if 'facebook-bot-saas' in line:
+            print(line.strip().replace('\n', ''))
+    
+    # 3. Vérification du nombre d'arguments
+    if len(args) != 2:
+        print("-> ERREUR DÉTECTÉE : Le nombre d'arguments est incorrect. La publication est annulée.")
+        print("="*50 + "\n")
+        return # On arrête l'exécution ici pour éviter de planter
+
+    print("-> Nombre d'arguments correct. Poursuite de la publication.")
+    print("="*50 + "\n")
+
+    # 4. Si le nombre d'arguments est correct, on exécute la logique normale
+    active_pages, message = args
+    
     try:
         db.session.add(Broadcast(content=message))
         db.session.commit()
         print(f"[HISTORIQUE] Message enregistré: {message[:60]}...")
     except Exception as e:
         db.session.rollback()
-        _app.logger.error(f"[HISTORIQUE ERREUR] {e}")
-    if not active_pages: return
-    print(f"[BROADCAST] Envoi à {len(active_pages)} page(s)...")
+        # Il faut importer current_app si ce n'est pas déjà fait
+        from flask import current_app
+        current_app.logger.error(f"[HISTORIQUE ERREUR] {e}")
+
+    if not active_pages:
+        print(f"[BROADCAST IGNORÉ] Aucun auditeur actif pour le message : {message[:60]}...")
+        return
+        
+    print(f"[BROADCAST] Envoi du message à {len(active_pages)} page(s) : {message[:60]}...")
     encryption_service = EncryptionService()
     for page in active_pages:
         try:
-            graph = GraphAPI(access_token=encryption_service.decrypt(page.encrypted_page_access_token))
+            decrypted_token = encryption_service.decrypt(page.encrypted_page_access_token)
+            graph = GraphAPI(access_token=decrypted_token)
             graph.put_object(parent_object=page.facebook_page_id, connection_name="feed", message=message)
             print(f"  -> Succès pour '{page.page_name}'")
         except Exception as e:
-            print(f"  -> ERREUR FB pour '{page.page_name}': {e}")
+            print(f"  -> ERREUR pour '{page.page_name}': {e}")
 # Dans app/tasks.py
 
 def check_expired_subscriptions():
