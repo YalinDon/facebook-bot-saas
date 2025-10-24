@@ -718,8 +718,8 @@ def admin_publish_news():
 
         # 3. Utiliser notre fonction de broadcast existante
         # Elle va enregistrer dans l'historique 'Broadcast' et publier sur les pages
-        encryption_service = EncryptionService() # On a besoin de ça pour broadcast
-        tasks.broadcast_to_facebook(business_pages, message, encryption_service)
+        # On a besoin de ça pour broadcast
+        tasks.broadcast_to_facebook(business_pages, message)
 
         # 4. Enregistrer l'actualité dans l'historique des news pour la cohérence
         new_news = PublishedNews(
