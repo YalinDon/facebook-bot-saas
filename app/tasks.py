@@ -486,7 +486,7 @@ def run_daily_renewals():
             # avec la même durée. On doit deviner si c'est mensuel ou annuel.
             # NOTE: Il faudrait stocker la durée pour que ce soit parfait.
             # Pour l'instant, on cherche le plan mensuel correspondant.
-            plan_id_to_renew = f"{user.subscription_plan}_monthly" 
+            plan_id_to_renew = user.subscription_plan
             plan_info = FEDAPAY_PLANS.get(plan_id_to_renew)
 
             if not plan_info or not user.fedapay_token:
