@@ -643,3 +643,4 @@ if not scheduler.get_job('fedapay_renewal_job'):
         trigger='cron',
         hour=2 # Tous les jours à 2h du matin
     )
+    
