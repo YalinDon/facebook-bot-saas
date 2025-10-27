@@ -710,7 +710,10 @@ def admin_publish_news():
         # 1. Récupérer toutes les pages des abonnés Business actifs
         business_pages = db.session.query(FacebookPage).join(User).filter(
             FacebookPage.is_active == True,
-            User.subscription_plan == 'business'
+            db.or_(
+                User.role == 'superadmin',
+                User.subscription_plan == 'business'
+            )
         ).all()
 
         # 2. Construire le message à publier
