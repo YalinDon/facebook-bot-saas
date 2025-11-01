@@ -10,7 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from facebook import GraphAPI
-
+import threading
 from app import scheduler, db
 from app.models import User, FacebookPage, Broadcast, PublishedNews, GlobalMatchState, GlobalPublishedMatch, GlobalState
 from app.services import EncryptionService
@@ -371,6 +371,47 @@ def run_daily_renewals():
                 user.subscription_status, user.subscription_plan, user.next_billing_date = 'inactive', None, None
         db.session.commit()
         print("--- Renouvellements Fedapay terminés ---")
+
+
+
+def start_realtime_match_monitor():
+    """Scraping continu en arrière-plan pour une publication instantanée."""
+    def loop():
+        driver = get_browser()
+        if not driver:
+            print("[ERREUR] Impossible de démarrer le navigateur pour le moniteur temps réel.")
+            return
+
+        last_scores = {}
+        while True:
+            try:
+                new_scores = get_live_scores(driver)
+                for key, data in new_scores.items():
+                    old = last_scores.get(key)
+                    if not old:
+                        last_scores[key] = data
+                        continue
+                    if data["score"] != old["score"]:
+                        print(f"⚡ Détection immédiate : {key} → {data['score']}")
+                        with _app.app_context():
+                            active_pages = db.session.query(FacebookPage).join(User).filter(
+                                FacebookPage.is_active == True,
+                                db.or_(
+                                    User.role == 'superadmin',
+                                    User.subscription_status == 'active',
+                                    User.trial_ends_at > datetime.utcnow()
+                                )
+                            ).all()
+                            msg = f"⚽ But en direct !\n{data['eq1']} {data['score']} {data['eq2']}"
+                            broadcast_to_facebook(active_pages, msg)
+                    last_scores[key] = data
+            except Exception as e:
+                print(f"[MONITEUR ERREUR] {e}")
+            time.sleep(8)  # 🔥 publication presque en temps réel
+    threading.Thread(target=loop, daemon=True).start()
+
+# Lancement du moniteur temps réel
+start_realtime_match_monitor()
 
 # =============================================================================
 # === ENREGISTREMENT DES TÂCHES ===============================================
