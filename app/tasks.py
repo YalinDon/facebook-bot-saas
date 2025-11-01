@@ -15,6 +15,7 @@ from app import scheduler, db
 from app.models import User, FacebookPage, Broadcast, PublishedNews, GlobalMatchState, GlobalPublishedMatch, GlobalState
 from app.services import EncryptionService
 from app.plans import FEDAPAY_PLANS
+from app import app  # ✅ on importe l’instance Flask
 
 # --- Config ---
 _app = None
@@ -393,7 +394,7 @@ def start_realtime_match_monitor():
                         continue
                     if data["score"] != old["score"]:
                         print(f"⚡ Détection immédiate : {key} → {data['score']}")
-                        with _app.app_context():
+                        with app.app_context():
                             active_pages = db.session.query(FacebookPage).join(User).filter(
                                 FacebookPage.is_active == True,
                                 db.or_(
