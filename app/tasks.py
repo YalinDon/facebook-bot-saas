@@ -24,41 +24,8 @@ LIVE_URL = "https://www.matchendirect.fr/live-score/"
 FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
 
 def init_app(app):
-    """Initialise les tâches planifiées (scraping régulier des scores)."""
     global _app
     _app = app
-
-    try:
-        # Vérifie que le scheduler Flask est bien disponible
-        if not hasattr(app, 'scheduler'):
-            from flask_apscheduler import APScheduler
-            scheduler = APScheduler()
-            scheduler.init_app(app)
-            scheduler.start()
-            print("[INIT] Scheduler initialisé manuellement.")
-        else:
-            scheduler = app.scheduler
-
-        # On planifie le scraping centralisé des matchs en direct
-        job_id = "run_centralized_checks_job"
-
-        # Supprimer le job existant pour éviter les doublons
-        if scheduler.get_job(job_id):
-            scheduler.remove_job(job_id)
-
-        # Ajouter le job (exécution toutes les 8 secondes)
-        scheduler.add_job(
-            id=job_id,
-            func=lambda: run_centralized_checks(),
-            trigger="interval",
-            seconds=8,
-            replace_existing=True
-        )
-
-        print("[INIT] Tâche 'run_centralized_checks()' planifiée toutes les 8 secondes.")
-    except Exception as e:
-        print(f"[INIT ERREUR] Impossible d'initialiser les tâches : {e}")
-
 # =============================================================================
 # === FONCTIONS UTILITAIRES ===================================================
 # =============================================================================
@@ -581,6 +548,7 @@ def run_daily_renewals():
 # === ENREGISTREMENT DES TÂCHES ===============================================
 # =============================================================================
 
+scheduler.add_job(id='centralized_checks_job', func=run_centralized_checks, trigger='interval', seconds=5, replace_existing=True)
 scheduler.add_job(id='check_expired_job', func=check_expired_subscriptions, trigger='cron', hour=1, minute=5, replace_existing=True)
 scheduler.add_job(id='publish_news_job', func=publish_news_for_business_users, trigger='interval', minutes=15, replace_existing=True)
 scheduler.add_job(id='live_summary_job', func=post_live_scores_summary, trigger='interval', minutes=30, replace_existing=True)
