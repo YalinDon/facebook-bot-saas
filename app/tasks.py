@@ -23,8 +23,14 @@ LIVE_URL = "https://www.matchendirect.fr/live-score/"
 FINISHED_URL = "https://www.matchendirect.fr/live-foot/"
 
 def init_app(app):
+    """Initialise les tâches et démarre le moniteur temps réel."""
     global _app
     _app = app
+    try:
+        start_realtime_match_monitor()  # ✅ Lancer ici, pas avant
+        print("[INIT] Moniteur temps réel démarré.")
+    except Exception as e:
+        print(f"[INIT ERREUR] Impossible de démarrer le moniteur : {e}")
 
 # =============================================================================
 # === FONCTIONS UTILITAIRES ===================================================
@@ -42,10 +48,11 @@ def get_browser():
     options.add_argument('--disable-infobars')
     options.add_argument('--disable-popup-blocking')
     options.add_argument('--disable-cache')
+    options.page_load_strategy = 'eager'
     try:
         service = Service() 
         driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(60)
+        driver.set_page_load_timeout(40)
         return driver
     except Exception as e:
         print(f"[ERREUR SELENIUM] Impossible de démarrer le navigateur : {e}")
@@ -394,7 +401,7 @@ def start_realtime_match_monitor():
                         continue
                     if data["score"] != old["score"]:
                         print(f"⚡ Détection immédiate : {key} → {data['score']}")
-                        with current_app.app_context():
+                        with _app.app_context():
                             active_pages = db.session.query(FacebookPage).join(User).filter(
                                 FacebookPage.is_active == True,
                                 db.or_(
@@ -412,7 +419,7 @@ def start_realtime_match_monitor():
     threading.Thread(target=loop, daemon=True).start()
 
 # Lancement du moniteur temps réel
-start_realtime_match_monitor()
+#start_realtime_match_monitor()
 
 # =============================================================================
 # === ENREGISTREMENT DES TÂCHES ===============================================
