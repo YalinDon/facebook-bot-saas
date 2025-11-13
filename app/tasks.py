@@ -146,29 +146,28 @@ def get_article_content(driver, article_url):
         print(f"   -> Avertissement: Impossible de scraper le contenu de {article_url}. Erreur: {e}")
         return None
 
-def scrape_football_news(driver):
-    print("📰 Scraping des actualités...")
-    news_list = []
-    try:
-        driver.get("https://www.maxifoot.fr/")
-        try:
-            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "didomi-notice-agree-button"))).click()
-            time.sleep(1)
-        except TimeoutException: pass
+# def scrape_football_news(driver):
+#     print("📰 Scraping des actualités...")
+#     news_list = []
+#     try:
+#         driver.get("https://www.maxifoot.fr/")
+#         try:
+#             WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "didomi-notice-agree-button"))).click()
+#             time.sleep(1)
+#         except TimeoutException: pass
 
-        container = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.listegen5.listeInfo3")))
-        for link_tag in BeautifulSoup(container.get_attribute('outerHTML'), "html.parser").find_all("a", href=True):
-            if "Voir les brèves précédentes" in link_tag.get_text(): continue
-            if (time_tag := link_tag.find('b')): time_tag.extract()
-            title = link_tag.get_text(strip=True)
-            url = link_tag['href']
-            if not url.startswith('http'): url = "https://news.maxifoot.fr/" + url.lstrip('/')
-            if (content := get_article_content(driver, url)):
-                news_list.append({'title': title, 'url': url, 'content': content})
-        print(f"✅ {len(news_list)} actualités avec contenu trouvées.")
-    except Exception as e: print(f"[ERREUR SCRAPING NEWS] {e}")
-    return news_list
-
+#         container = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.listegen5.listeInfo3")))
+#         for link_tag in BeautifulSoup(container.get_attribute('outerHTML'), "html.parser").find_all("a", href=True):
+#             if "Voir les brèves précédentes" in link_tag.get_text(): continue
+#             if (time_tag := link_tag.find('b')): time_tag.extract()
+#             title = link_tag.get_text(strip=True)
+#             url = link_tag['href']
+#             if not url.startswith('http'): url = "https://news.maxifoot.fr/" + url.lstrip('/')
+#             if (content := get_article_content(driver, url)):
+#                 news_list.append({'title': title, 'url': url, 'content': content})
+#         print(f"✅ {len(news_list)} actualités avec contenu trouvées.")
+#     except Exception as e: print(f"[ERREUR SCRAPING NEWS] {e}")
+#     return news_list
 # =============================================================================
 # === TÂCHES PLANIFIÉES =======================================================
 # =============================================================================
@@ -255,14 +254,27 @@ def run_centralized_checks():
             driver.quit()
             print(f"--- Cycle scores terminé en {time.time() - start_time:.2f}s ---")
 
+# app/tasks.py
+
+# ... (le reste de vos imports et fonctions) ...
+
 def post_live_scores_summary():
     if _app is None: return
     with _app.app_context():
+        start_time = time.time() # S'assurer que start_time est défini pour le log de fin
         print(f"\n--- [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Démarrage du résumé des scores ---")
+        
         scores_from_db = GlobalMatchState.query.all()
+        
+        # Filtrer les matchs "TER" et créer la liste pour le hash
         current_summary_list = sorted([f"{s.match_key}:{s.score}" for s in scores_from_db if s.statut != "TER"])
+        
         if not current_summary_list:
-            print("Aucun match en cours à résumer."); return
+            print("Aucun match en cours à résumer. Aucune publication.");
+            # Si le dernier hash existe et qu'il n'y a plus de matchs, on peut envisager de le réinitialiser
+            # pour publier un message vide ou de fin si vous le souhaitez.
+            # Pour l'instant, on ne fait rien s'il n'y a pas de matchs.
+            return
 
         current_hash = hashlib.md5("|".join(current_summary_list).encode('utf-8')).hexdigest()
         last_hash_obj = GlobalState.query.filter_by(key='last_summary_hash').first()
@@ -275,22 +287,48 @@ def post_live_scores_summary():
             FacebookPage.is_active == True,
             db.or_(User.role == 'superadmin', User.subscription_status == 'active', User.trial_ends_at > datetime.utcnow())
         ).all()
-        if not active_pages: return
+        if not active_pages:
+            print("Aucune page éligible pour la publication du résumé.");
+            return
 
         message = "📊 Scores en direct :\n\n"
-        for s in sorted(scores_from_db, key=lambda x: x.match_key):
-            if s.statut != "TER":
-                ligne = f"{s.eq1} {s.score} {s.eq2}"
-                if s.statut == "MT": ligne += " (MT)"
-                elif "'" in s.minute: ligne += f" ({s.minute})"
-                message += f"◉ {ligne}\n"
         
-        broadcast_to_facebook(active_pages, message.strip())
+        # On trie pour avoir un ordre cohérent dans la publication
+        for s in sorted(scores_from_db, key=lambda x: x.match_key):
+            if s.statut != "TER": # On ne publie que les matchs qui ne sont PAS terminés
+                # Initialisation de la ligne du match
+                ligne = f"◉ {s.eq1} {s.score} {s.eq2}"
+                
+                # Ajout de l'indicateur de statut/minute
+                if s.statut == "MT":
+                    ligne += " (MT)"
+                elif "'" in s.minute: # Si la minute contient une apostrophe (ex: "45'")
+                    ligne += f" ({s.minute})"
+                elif s.minute.strip(): # Nouveau: Si la minute n'est pas "MT" et contient du texte non vide/non-apostrophe
+                    # Ceci gère les cas où "td.lm2" contient du texte comme "Début", "Pause", etc.,
+                    # qui n'est ni "mi-temps" ni un nombre avec apostrophe.
+                    ligne += f" ({s.minute.strip()})"
+                # Si s.minute est une chaîne vide (""), rien n'est ajouté, ce qui est le comportement souhaité.
+                
+                message += f"{ligne}\n" # Ajoute la ligne construite au message
+        
+        # Assurez-vous d'avoir au moins un message non vide avant de publier
+        if message.strip() != "📊 Scores en direct :":
+            broadcast_to_facebook(active_pages, message.strip())
 
-        if last_hash_obj: last_hash_obj.value = current_hash
-        else: db.session.add(GlobalState(key='last_summary_hash', value=current_hash))
-        db.session.commit()
-        print("--- Publication du résumé terminée ---")
+            # Mise à jour du hash seulement si un message a été publié
+            if last_hash_obj:
+                last_hash_obj.value = current_hash
+            else:
+                db.session.add(GlobalState(key='last_summary_hash', value=current_hash))
+            db.session.commit()
+            print(f"--- Publication du résumé terminée en {time.time() - start_time:.2f}s ---")
+        else:
+            print("Résumé des scores vide (après filtrage), aucune publication.");
+            # Si le hash était différent mais qu'aucun match n'est finalement publié,
+            # on pourrait vouloir mettre à jour le hash pour éviter de spammer
+            # avec un message vide, ou le laisser pour le forcer plus tard.
+            # Pour l'instant, on ne touche pas au hash si le message est vide.
 
 def check_expired_subscriptions():
     if _app is None: return
@@ -303,36 +341,36 @@ def check_expired_subscriptions():
             user.subscription_plan = None
         db.session.commit()
 
-def publish_news_for_business_users():
-    if _app is None: return
-    with _app.app_context():
-        start_time = time.time()
-        print(f"\n--- Publication des actualités ---")
-        business_pages = db.session.query(FacebookPage).join(User).filter(
-            FacebookPage.is_active == True,
-            db.or_(User.role == 'superadmin', User.subscription_plan == 'business')
-        ).all()
-        if not business_pages: print("Aucun abonné Business actif."); return
+# def publish_news_for_business_users():
+#     if _app is None: return
+#     with _app.app_context():
+#         start_time = time.time()
+#         print(f"\n--- Publication des actualités ---")
+#         business_pages = db.session.query(FacebookPage).join(User).filter(
+#             FacebookPage.is_active == True,
+#             db.or_(User.role == 'superadmin', User.subscription_plan == 'business')
+#         ).all()
+#         if not business_pages: print("Aucun abonné Business actif."); return
 
-        driver = get_browser()
-        if not driver: return
+#         driver = get_browser()
+#         if not driver: return
 
-        try:
-            latest_news = scrape_football_news(driver)
-            if not latest_news: return
+#         try:
+#             latest_news = scrape_football_news(driver) # Cette ligne fera référence à la fonction commentée
+#             if not latest_news: return
 
-            published_urls = {news.article_url for news in PublishedNews.query.all()}
-            news_to_publish = [news for news in reversed(latest_news) if news['url'] not in published_urls]
-            
-            for news in news_to_publish:
-                message = f"🚨 **ACTU FOOT** 🚨\n\n**{news['title']}**\n\n{news['content']}"
-                broadcast_to_facebook(business_pages, message)
-                db.session.add(PublishedNews(article_url=news['url'], title=news['title'], content=news['content']))
-                db.session.commit()
-                time.sleep(10)
-        finally:
-            driver.quit()
-            print(f"--- Publication des actualités terminée en {time.time() - start_time:.2f}s ---")
+#             published_urls = {news.article_url for news in PublishedNews.query.all()}
+#             news_to_publish = [news for news in reversed(latest_news) if news['url'] not in published_urls]
+
+#             for news in news_to_publish:
+#                 message = f"🚨 **ACTU FOOT** 🚨\n\n**{news['title']}**\n\n{news['content']}"
+#                 broadcast_to_facebook(business_pages, message)
+#                 db.session.add(PublishedNews(article_url=news['url'], title=news['title'], content=news['content']))
+#                 db.session.commit()
+#                 time.sleep(10)
+#         finally:
+#             driver.quit()
+#             print(f"--- Publication des actualités terminée en {time.time() - start_time:.2f}s ---")
 
 def charge_with_fedapay_token(user, plan_info):
     api_base_url = _app.config['FEDAPAY_API_BASE']
@@ -378,6 +416,6 @@ def run_daily_renewals():
 
 scheduler.add_job(id='centralized_checks_job', func=run_centralized_checks, trigger='interval', seconds=8, replace_existing=True)
 scheduler.add_job(id='check_expired_job', func=check_expired_subscriptions, trigger='cron', hour=1, minute=5, replace_existing=True)
-scheduler.add_job(id='publish_news_job', func=publish_news_for_business_users, trigger='interval', minutes=15, replace_existing=True)
+#scheduler.add_job(id='publish_news_job', func=publish_news_for_business_users, trigger='interval', minutes=15, replace_existing=True)
 scheduler.add_job(id='live_summary_job', func=post_live_scores_summary, trigger='interval', minutes=30, replace_existing=True)
 scheduler.add_job(id='fedapay_renewal_job', func=run_daily_renewals, trigger='cron', hour=2, replace_existing=True)

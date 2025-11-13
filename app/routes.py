@@ -140,16 +140,16 @@ def dashboard():
         })
 
     # 4. Si l'utilisateur est un abonné Business, on ajoute les actualités
-    if current_user.subscription_status == 'active' and current_user.subscription_plan == 'business':
-        business_news = PublishedNews.query.order_by(PublishedNews.published_at.desc()).limit(15).all()
-        for item in business_news:
-            history_items.append({
-                'type': 'news',
-                'timestamp': item.published_at,
-                'title': item.title,
-                'content': item.content,
-                'url': item.article_url
-            })
+    #if current_user.subscription_status == 'active' and current_user.subscription_plan == 'business':
+        #business_news = PublishedNews.query.order_by(PublishedNews.published_at.desc()).limit(15).all()
+        #for item in business_news:
+            #history_items.append({
+                #'type': 'news',
+                #'timestamp': item.published_at,
+                #'title': item.title,
+                #'content': item.content,
+                #'url': item.article_url
+            #})
     
     # 5. On trie la liste combinée par date, du plus récent au plus ancien
     history_items.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -694,52 +694,59 @@ def admin_notify_all():
 
 # Dans app/routes.py, dans la section des routes admin
 
-@main.route('/admin/publish-news', methods=['POST'])
-@login_required
-@admin_required
-def admin_publish_news():
-    """Prend une actualité depuis le formulaire admin et la publie."""
-    title = request.form.get('title')
-    content = request.form.get('content')
+# @main.route('/admin/publish-news', methods=['POST'])
+# @login_required
+# @admin_required
+# def admin_publish_news():
+#     """
+#     Prend une actualité depuis le formulaire admin et la publie.
+#     Cette fonctionnalité est désactivée.
+#     """
+#     flash("La publication d'actualités par l'administrateur est actuellement désactivée.", "info")
+#     return redirect(url_for('main.admin_dashboard'))
 
-    if not title or not content:
-        flash("Le titre et le contenu de l'actualité sont requis.", "warning")
-        return redirect(url_for('main.admin_dashboard'))
+# Ancien code commenté pour désactiver la fonction :
+#     title = request.form.get('title')
+#     content = request.form.get('content')
 
-    try:
-        # 1. Récupérer toutes les pages des abonnés Business actifs
-        business_pages = db.session.query(FacebookPage).join(User).filter(
-            FacebookPage.is_active == True,
-            db.or_(
-                User.role == 'superadmin',
-                User.subscription_plan == 'business'
-            )
-        ).all()
+#     if not title or not content:
+#         flash("Le titre et le contenu de l'actualité sont requis.", "warning")
+#         return redirect(url_for('main.admin_dashboard'))
 
-        # 2. Construire le message à publier
-        message = f"🚨 **ACTU EXCLUSIVE** 🚨\n\n**{title}**\n\n{content}"
+#     try:
+#         # 1. Récupérer toutes les pages des abonnés Business actifs
+#         business_pages = db.session.query(FacebookPage).join(User).filter(
+#             FacebookPage.is_active == True,
+#             db.or_(
+#                 User.role == 'superadmin',
+#                 User.subscription_plan == 'business'
+#             )
+#         ).all()
 
-        # 3. Utiliser notre fonction de broadcast existante
-        # Elle va enregistrer dans l'historique 'Broadcast' et publier sur les pages
-        # On a besoin de ça pour broadcast
-        tasks.broadcast_to_facebook(business_pages, message)
+#         # 2. Construire le message à publier
+#         message = f"🚨 **ACTU EXCLUSIVE** 🚨\n\n**{title}**\n\n{content}"
 
-        # 4. Enregistrer l'actualité dans l'historique des news pour la cohérence
-        new_news = PublishedNews(
-            title=title,
-            content=content,
-            source='admin' # On spécifie que ça vient de l'admin
-        )
-        db.session.add(new_news)
-        db.session.commit()
+#         # 3. Utiliser notre fonction de broadcast existante
+#         # Elle va enregistrer dans l'historique 'Broadcast' et publier sur les pages
+#         # On a besoin de ça pour broadcast
+#         tasks.broadcast_to_facebook(business_pages, message)
 
-        flash("L'actualité a été publiée avec succès pour les abonnés Business.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Une erreur est survenue lors de la publication : {e}", "danger")
-        current_app.logger.error(f"Erreur publication actu admin: {e}")
+#         # 4. Enregistrer l'actualité dans l'historique des news pour la cohérence
+#         new_news = PublishedNews(
+#             title=title,
+#             content=content,
+#             source='admin' # On spécifie que ça vient de l'admin
+#         )
+#         db.session.add(new_news)
+#         db.session.commit()
 
-    return redirect(url_for('main.admin_dashboard'))
+#         flash("L'actualité a été publiée avec succès pour les abonnés Business.", "success")
+#     except Exception as e:
+#         db.session.rollback()
+#         flash(f"Une erreur est survenue lors de la publication : {e}", "danger")
+#         current_app.logger.error(f"Erreur publication actu admin: {e}")
+
+#     return redirect(url_for('main.admin_dashboard'))
 
 
 # Dans app/routes.py
